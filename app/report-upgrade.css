@@ -1,0 +1,56 @@
+.account-grid-v2 .field-wide:last-child{grid-column:span 2}
+.queue-item-v2{grid-template-columns:54px minmax(150px,1fr) minmax(150px,190px) auto 30px}
+.queue-type{display:grid;gap:4px}
+.queue-type>span{color:var(--muted);font:600 8px var(--font-mono),monospace;letter-spacing:.08em;text-transform:uppercase}
+.queue-type select{width:100%;height:34px;padding:0 8px;color:var(--ink);border:1px solid var(--line);background:#fbfaf6;font-size:10px}
+.queue-type select:focus{border-color:var(--forest);outline:0}
+.queue-remove{display:grid;width:28px;height:28px;place-items:center;color:#6f817a;border:0;background:transparent;font-size:18px}
+.queue-remove:disabled{opacity:.3}
+.sheet-banner{display:grid;gap:4px;padding:13px 24px;color:#fff;text-align:center;background:#277d5f;border-top:1px solid rgb(255 255 255/.18)}
+.sheet-banner strong{font-size:17px;text-transform:uppercase}
+.sheet-banner span{font-size:11px}
+.positions-sheet{min-width:1280px}
+.positions-sheet thead tr:first-child th{height:38px;text-align:center}
+.positions-sheet thead tr:nth-child(2) th{height:34px;text-align:center}
+.positions-sheet .buy-band{color:#071b0d;background:#11ee2b;font-weight:700}
+.positions-sheet .sell-band{color:#fff;background:#ff1717;font-weight:700}
+.positions-sheet .buy-subhead{color:#075c25;background:#d7f8dc}
+.positions-sheet .sell-subhead{color:#9a1010;background:#ffe0e0}
+.positions-sheet th:nth-child(1){width:95px}
+.positions-sheet th:nth-child(2){width:126px}
+.positions-sheet th:nth-child(3){width:118px}
+.positions-sheet th:nth-child(8){width:120px}
+.positions-sheet th:nth-child(9){width:120px}
+.positions-sheet th:last-child{width:38px}
+.product-group-cell{position:relative;padding:10px!important;color:#10251e;background:#f6f5ef!important;font-size:13px;vertical-align:middle!important}
+.product-group-cell strong{display:block}
+.average-row td{height:39px;padding:0 9px!important;border-top:2px solid #263f36;background:#f4f6f3;font-family:var(--font-mono),monospace;font-weight:600;text-align:right}
+.average-row td:first-child{text-align:center}
+.sheet-empty-cell{height:36px!important;background:#fcfcfa!important}
+.sheet-total-row td:first-child{text-align:center;text-transform:none}
+.sheet-heading-row th{height:34px!important;text-align:center!important;font-weight:700!important;letter-spacing:.02em}
+.trades-sheet{min-width:2380px}
+.trades-sheet thead tr:nth-child(2) th{text-align:center}
+.trades-sheet th:first-child{width:58px}
+.trades-sheet th:nth-child(2){width:110px}
+.trades-sheet th:nth-child(3),.trades-sheet th:nth-child(4),.trades-sheet th:nth-child(5){width:112px}
+.trades-sheet th:nth-child(6){width:112px}
+.trades-sheet th:nth-child(7),.trades-sheet th:nth-child(8){width:90px}
+.trades-sheet th:nth-child(9),.trades-sheet th:nth-child(10){width:112px}
+.trades-sheet th:nth-child(11),.trades-sheet th:nth-child(12),.trades-sheet th:nth-child(13),.trades-sheet th:nth-child(14),.trades-sheet th:nth-child(15){width:112px}
+.trades-sheet th:nth-child(16),.trades-sheet th:nth-child(17){width:150px}
+.trades-sheet th:last-child{width:38px}
+.copyable-cell{position:relative}
+.data-table .copyable-cell input,.data-table .copyable-cell select{padding-right:29px}
+.cell-copy{position:absolute;z-index:2;right:3px;top:50%;display:grid;width:23px;height:23px;padding:0;place-items:center;transform:translateY(-50%);color:#0b6b50;border:1px solid #bed4ca;background:#f4fbf7;font:13px var(--font-mono),monospace;opacity:.58}
+.cell-copy:hover,.cell-copy:focus{color:#fff;border-color:var(--forest);outline:0;background:var(--forest);opacity:1}
+.copyable-cell:focus{outline:2px solid #0b6b50;outline-offset:-2px}
+.static-copy-cell{padding:0 32px 0 9px!important}
+.static-copy-cell>span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.numeric-cell{text-align:right;font-family:var(--font-mono),monospace}
+.static-copy-cell small{display:block;color:var(--muted);font-size:8px}
+.total-row .static-copy-cell{padding-right:32px!important}
+.total-row .derived-cell{background:#edf5f0!important}
+.rule-note code+code{margin-top:5px}
+@media(hover:hover){.cell-copy{opacity:0}.copyable-cell:hover .cell-copy,.copyable-cell:focus-within .cell-copy,.copyable-cell:focus .cell-copy{opacity:1}}
+@media(max-width:760px){.account-grid-v2 .field-wide:last-child{grid-column:auto}.queue-item-v2{grid-template-columns:48px minmax(0,1fr) 28px}.queue-item-v2 img{grid-row:1/3}.queue-type{grid-column:2}.queue-status{grid-column:3;grid-row:1}.queue-remove{grid-column:3;grid-row:2}.sheet-banner{padding:12px 14px}.sheet-banner strong{font-size:13px}}
