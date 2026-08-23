@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   normalizeSettledTradeFromAi,
+  serializeDailySheets,
   type AiExtractedTrade,
 } from '../app/lib/ai-report.ts';
+import ExcelJS from 'exceljs';
 
 const settledLong: AiExtractedTrade = {
   sourceSheet: 'Ngày 20.08',
@@ -39,4 +41,31 @@ test('đối soát phí hai lượt và P&L sau phí từ dữ liệu AI', () =>
   assert.equal(trade.pnlBeforeFee, -187.5);
   assert.equal(trade.pnlAfterFee, -220.5);
   assert.equal(trade.commodity, 'Nhôm');
+});
+
+test('chuẩn hóa mã tài khoản PG BP trong workbook mẫu', () => {
+  assert.equal(normalizeSettledTradeFromAi({ ...settledLong, account: 'PG BP 8668' })?.account, 'PG BP 668');
+  assert.equal(normalizeSettledTradeFromAi({ ...settledLong, account: 'PB BP 8888' })?.account, 'PG BP 888');
+});
+
+test('bỏ qua ô gộp rỗng và chỉ tuần tự hóa block hạch toán', async () => {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Ngày 20.08');
+  sheet.mergeCells('A1:Q1');
+  sheet.getCell('A1').value = 'Vị thế đang có: PG BP 8668';
+  sheet.mergeCells('A3:Q3');
+  sheet.getCell('A3').value = 'HẠCH TOÁN LỢI NHUẬN GIAO DỊCH';
+  sheet.addRow([
+    'STT', 'Người thực hiện', 'Ngày mở lệnh', 'Ngày tất toán', 'Ngày đáo hạn',
+    'Mã hợp đồng', 'Mặt hàng', 'Vị thế', 'Giá mở', 'Giá đóng',
+  ]);
+  sheet.addRow([1, 'Đức', '20/08/2026', '21/08/2026', '20/11/2026', 'LALZ', 'Nhôm', 'Long', 3209, 3201.5]);
+  sheet.mergeCells('A8:Q8');
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const serialized = await serializeDailySheets(buffer as ArrayBuffer);
+  assert.equal(serialized.length, 1);
+  assert.equal(serialized[0].blocks.length, 1);
+  assert.equal(serialized[0].blocks[0].accountHint, 'PG BP 668');
+  assert.equal(serialized[0].blocks[0].rows.at(-1)?.row, 5);
 });

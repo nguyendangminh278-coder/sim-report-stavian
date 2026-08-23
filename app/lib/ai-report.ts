@@ -42,7 +42,12 @@ export type WeeklyAiReview = {
 };
 
 type SerializedRow = { row: number; cells: Array<{ column: string; value: string }> };
-type SerializedSheet = { sheet: string; rows: SerializedRow[] };
+type SerializedBlock = {
+  accountHint: string;
+  titleRow: number;
+  rows: SerializedRow[];
+};
+type SerializedSheet = { sheet: string; blocks: SerializedBlock[] };
 
 const EXTRACTION_SCHEMA: GeminiSchema = {
   type: 'OBJECT',
@@ -145,8 +150,8 @@ function canonicalAccount(value: string): string {
   const normalized = normalizeText(value);
   if (normalized.includes('vietin')) return 'Vietinbank';
   if (normalized.includes('bidv')) return 'BIDV';
-  if (normalized.includes('pg bp 668')) return 'PG BP 668';
-  if (normalized.includes('pg bp 888')) return 'PG BP 888';
+  if (/p[gb] bp (?:668|8668)\b/.test(normalized)) return 'PG BP 668';
+  if (/p[gb] bp (?:888|8888)\b/.test(normalized)) return 'PG BP 888';
   if (normalized.includes('pg') && normalized.includes('sim')) return 'PG SIM';
   if (normalized.includes('stone')) return 'STONEX';
   return value.trim();
@@ -326,7 +331,12 @@ function columnName(number: number) {
   return name;
 }
 
-async function serializeDailySheets(input: ArrayBuffer): Promise<SerializedSheet[]> {
+function accountHintFromText(value: string): string {
+  const account = canonicalAccount(value);
+  return account === value.trim() ? '' : account;
+}
+
+export async function serializeDailySheets(input: ArrayBuffer): Promise<SerializedSheet[]> {
   const imported = await import('exceljs');
   const ExcelJS = (imported.default || imported) as typeof import('exceljs');
   const workbook = new ExcelJS.Workbook();
@@ -337,19 +347,76 @@ async function serializeDailySheets(input: ArrayBuffer): Promise<SerializedSheet
   });
 
   return dailySheets.map((sheet) => {
-    const rows: SerializedRow[] = [];
+    const blocks: SerializedBlock[] = [];
+    let currentBlock: SerializedBlock | null = null;
+    let lastAccountHint = '';
+    let blankRows = 0;
+
     for (let rowNumber = 1; rowNumber <= sheet.rowCount; rowNumber += 1) {
       const row = sheet.getRow(rowNumber);
       const cells: SerializedRow['cells'] = [];
-      const columnCount = Math.min(Math.max(row.cellCount, sheet.columnCount), 30);
+      const seenMergedCells = new Set<string>();
+      const columnCount = Math.min(Math.max(row.cellCount, sheet.columnCount), 22);
       for (let column = 1; column <= columnCount; column += 1) {
-        const value = row.getCell(column).text.trim();
+        const cell = row.getCell(column);
+        if (cell.value === null || cell.value === undefined) continue;
+        if (cell.isMerged) {
+          const masterAddress = cell.master.address;
+          if (seenMergedCells.has(masterAddress)) continue;
+          seenMergedCells.add(masterAddress);
+        }
+        let value = '';
+        try {
+          value = cell.text.trim();
+        } catch {
+          const raw = cell.value;
+          if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') {
+            value = String(raw).trim();
+          }
+        }
         if (value) cells.push({ column: columnName(column), value });
       }
-      if (cells.length) rows.push({ row: rowNumber, cells });
+
+      const serializedRow = { row: rowNumber, cells };
+      const rowText = cells.map((cell) => cell.value).join(' ');
+      const normalizedRow = normalizeText(rowText);
+      const rowAccountHint = accountHintFromText(rowText);
+
+      if (normalizedRow.includes('vi the dang co')) {
+        currentBlock = null;
+        blankRows = 0;
+        if (rowAccountHint) lastAccountHint = rowAccountHint;
+        continue;
+      }
+
+      if (normalizedRow.includes('hach toan loi nhuan giao dich')) {
+        currentBlock = {
+          accountHint: rowAccountHint || lastAccountHint,
+          titleRow: rowNumber,
+          rows: [serializedRow],
+        };
+        blocks.push(currentBlock);
+        blankRows = 0;
+        continue;
+      }
+
+      if (!currentBlock) continue;
+      if (!cells.length) {
+        blankRows += 1;
+        if (blankRows >= 3) currentBlock = null;
+        continue;
+      }
+      blankRows = 0;
+      currentBlock.rows.push(serializedRow);
     }
-    return { sheet: sheet.name, rows };
-  });
+    return {
+      sheet: sheet.name,
+      blocks: blocks.filter((block) => block.rows.some((blockRow) => {
+        const text = normalizeText(blockRow.cells.map((cell) => cell.value).join(' '));
+        return text.includes('nguoi thuc hien') && text.includes('ngay mo lenh') && text.includes('ngay tat toan');
+      })),
+    };
+  }).filter((sheet) => sheet.blocks.length > 0);
 }
 
 function chunkSheets(sheets: SerializedSheet[], maxCharacters = 52000) {
@@ -377,7 +444,8 @@ QUY TẮC BẮT BUỘC:
 - Chỉ lấy dòng thuộc bảng có tiêu đề "HẠCH TOÁN LỢI NHUẬN GIAO DỊCH" trong từng sheet ngày.
 - Bỏ toàn bộ bảng "Vị thế đang có", Positions, OTE, báo cáo tuần và mọi dòng tổng.
 - Một lệnh đã hạch toán phải có ngày mở, ngày tất toán, giá mở, giá đóng, khối lượng lot và vị thế Long/Short. Thiếu một trong các dữ liệu cốt lõi này thì không xuất.
-- Đọc ngữ cảnh tài khoản ở tiêu đề gần bảng: BIDV, Vietinbank, PG SIM, PG BP 668, PG BP 888 hoặc STONEX.
+- Mỗi block đã có accountHint lấy từ tiêu đề gần nhất. Dùng accountHint cho toàn bộ lệnh trong block; chỉ thay đổi nếu tiêu đề hạch toán ghi rõ tài khoản khác.
+- Chuẩn hóa PG BP 8668 thành PG BP 668 và PG/PB BP 8888 thành PG BP 888.
 - Ô gộp "Người thực hiện" áp dụng cho các dòng lệnh liên tiếp trong cùng khối bảng.
 - sourceSheet phải đúng tên sheet; sourceRow là số dòng Excel; sourceStt là STT nhìn thấy trong bảng.
 - reportDate lấy từ ngày báo cáo/tên sheet, định dạng YYYY-MM-DD. Các ngày khác cũng dùng YYYY-MM-DD.
@@ -387,7 +455,7 @@ QUY TẮC BẮT BUỘC:
 - Vị thế chỉ là Long hoặc Short.
 - Không tính phí và lợi nhuận; website sẽ đối soát bằng công thức sau khi AI trích xuất.
 
-DỮ LIỆU Ô (mỗi cell có cột và giá trị, mỗi row giữ nguyên số dòng Excel):
+DỮ LIỆU CÁC BLOCK HẠCH TOÁN (mỗi cell có cột và giá trị, mỗi row giữ nguyên số dòng Excel):
 ${JSON.stringify(chunk)}`;
 }
 

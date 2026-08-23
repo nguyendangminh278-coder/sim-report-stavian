@@ -404,7 +404,7 @@ export default function MonthlyReportPage({
           <h1>Tổng hợp toàn bộ lệnh hạch toán</h1>
           <p>
             Tải workbook báo cáo lên. Gemini API của tài khoản bạn chỉ đọc các bảng hạch toán trong sheet ngày,
-            bỏ vị thế và OTE, rồi chuẩn hóa về đúng 22 cột.
+            bỏ vị thế và OTE, rồi chuẩn hóa về cấu trúc báo cáo thống nhất.
           </p>
         </div>
         <div className="monthly-hero-note" aria-label="Quy tắc tính">
@@ -558,7 +558,7 @@ export default function MonthlyReportPage({
 
             <div className="monthly-table-meta">
               <span>Hiển thị <strong>{filteredRecords.length}</strong> / {records.length} dòng</span>
-              <span>Kéo ngang để xem đủ 22 cột</span>
+              <span>Kéo ngang để xem toàn bộ bảng</span>
             </div>
 
             <div className="monthly-table-scroll" role="region" aria-label="Bảng tổng hợp lệnh hạch toán" tabIndex={0}>
@@ -604,17 +604,7 @@ export default function MonthlyReportPage({
             </div>
           </section>
         </>
-      ) : (
-        <section className="monthly-empty-state">
-          <span>22</span>
-          <div>
-            <h2>Một bảng chuẩn, đủ 22 trường dữ liệu</h2>
-            <p>
-              Sau khi chọn file, toàn bộ lệnh sẽ xuất hiện tại đây cùng bộ lọc, thao tác sao chép và nút tải xuống Excel.
-            </p>
-          </div>
-        </section>
-      )}
+      ) : null}
 
       {notice && <div className="monthly-toast" role="status">{notice}</div>}
     </main>
