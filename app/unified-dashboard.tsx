@@ -14,13 +14,15 @@ const TABS: Array<{ id: UnifiedTabId; label: string }> = [
   { id: 'bao-cao-tuan', label: 'Báo cáo tuần' },
 ];
 
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
 function tabUrl(tabId: UnifiedTabId) {
-  return tabId === 'doc-anh' ? '/' : `/?tab=${tabId}`;
+  return `${BASE_PATH}/?tab=${tabId}`;
 }
 
-function tabFromLocation(): UnifiedTabId {
+function tabFromLocation(fallback: UnifiedTabId): UnifiedTabId {
   const value = new URLSearchParams(window.location.search).get('tab');
-  return TABS.some((tab) => tab.id === value) ? value as UnifiedTabId : 'doc-anh';
+  return TABS.some((tab) => tab.id === value) ? value as UnifiedTabId : fallback;
 }
 
 export default function UnifiedDashboard({ initialTab = 'doc-anh' }: { initialTab?: UnifiedTabId }) {
@@ -29,12 +31,13 @@ export default function UnifiedDashboard({ initialTab = 'doc-anh' }: { initialTa
 
   useEffect(() => {
     const handlePopState = () => {
-      setActiveTab(tabFromLocation());
+      setActiveTab(tabFromLocation(initialTab));
       window.scrollTo({ top: 0, behavior: 'auto' });
     };
+    handlePopState();
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [initialTab]);
 
   const selectTab = (tabId: UnifiedTabId) => {
     setActiveTab(tabId);

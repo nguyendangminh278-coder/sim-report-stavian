@@ -1,5 +1,9 @@
-import { redirect } from 'next/navigation';
+import '../report-upgrade.css';
+import '../unified-dashboard.css';
+import UnifiedDashboard from '../unified-dashboard';
+
+export const dynamic = 'force-static';
 
 export default function MonthlyLegacyRoute() {
-  redirect('/?tab=tong-hop-lenh');
+  return <UnifiedDashboard initialTab="tong-hop-lenh" />;
 }
