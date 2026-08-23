@@ -1,9 +1,10 @@
 'use client';
 
-import { KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { KeyboardEvent, MouseEvent, useEffect, useRef, useState } from 'react';
 import WorkspaceV2 from './workspace-v2';
 import MonthlyReportTool from './tong-hop-lenh/monthly-tool';
 import WeeklyReportTool from './bao-cao-tuan/weekly-tool';
+import './unified-tab-fix.css';
 
 export type UnifiedTabId = 'doc-anh' | 'tong-hop-lenh' | 'bao-cao-tuan';
 
@@ -13,6 +14,10 @@ const TABS: Array<{ id: UnifiedTabId; label: string }> = [
   { id: 'bao-cao-tuan', label: 'Báo cáo tuần' },
 ];
 
+function tabUrl(tabId: UnifiedTabId) {
+  return tabId === 'doc-anh' ? '/' : `/?tab=${tabId}`;
+}
+
 function tabFromLocation(): UnifiedTabId {
   const value = new URLSearchParams(window.location.search).get('tab');
   return TABS.some((tab) => tab.id === value) ? value as UnifiedTabId : 'doc-anh';
@@ -20,7 +25,7 @@ function tabFromLocation(): UnifiedTabId {
 
 export default function UnifiedDashboard({ initialTab = 'doc-anh' }: { initialTab?: UnifiedTabId }) {
   const [activeTab, setActiveTab] = useState<UnifiedTabId>(initialTab);
-  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const tabRefs = useRef<Array<HTMLAnchorElement | null>>([]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -33,12 +38,16 @@ export default function UnifiedDashboard({ initialTab = 'doc-anh' }: { initialTa
 
   const selectTab = (tabId: UnifiedTabId) => {
     setActiveTab(tabId);
-    const url = tabId === 'doc-anh' ? '/' : `/?tab=${tabId}`;
-    window.history.pushState({ tab: tabId }, '', url);
+    window.history.replaceState({ tab: tabId }, '', tabUrl(tabId));
     window.scrollTo({ top: 0, behavior: 'auto' });
   };
 
-  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+  const handleTabClick = (event: MouseEvent<HTMLAnchorElement>, tabId: UnifiedTabId) => {
+    event.preventDefault();
+    selectTab(tabId);
+  };
+
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLAnchorElement>, index: number) => {
     let nextIndex = index;
     if (event.key === 'ArrowRight') nextIndex = (index + 1) % TABS.length;
     else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + TABS.length) % TABS.length;
@@ -61,60 +70,40 @@ export default function UnifiedDashboard({ initialTab = 'doc-anh' }: { initialTa
             <span><strong>SIM Report</strong><small>Stavian Industrial Metal</small></span>
           </button>
 
-          <div className="unified-tablist" role="tablist" aria-label="Công cụ SIM Report">
+          <nav className="unified-tablist" role="tablist" aria-label="Công cụ SIM Report">
             {TABS.map((tab, index) => {
               const selected = activeTab === tab.id;
               return (
-                <button
+                <a
                   key={tab.id}
                   ref={(element) => { tabRefs.current[index] = element; }}
                   id={`tab-${tab.id}`}
                   className={`unified-tab${selected ? ' active' : ''}`}
-                  type="button"
+                  href={tabUrl(tab.id)}
                   role="tab"
                   aria-selected={selected}
                   aria-controls={`panel-${tab.id}`}
                   tabIndex={selected ? 0 : -1}
-                  onClick={() => selectTab(tab.id)}
+                  onClick={(event) => handleTabClick(event, tab.id)}
                   onKeyDown={(event) => handleTabKeyDown(event, index)}
                 >
                   {tab.label}
-                </button>
+                </a>
               );
             })}
-          </div>
+          </nav>
 
           <div className="unified-privacy"><span aria-hidden="true" />Không cần đăng nhập</div>
         </div>
       </header>
 
-      <section
-        id="panel-doc-anh"
-        className="unified-panel unified-panel-image"
-        role="tabpanel"
-        aria-labelledby="tab-doc-anh"
-        hidden={activeTab !== 'doc-anh'}
-      >
+      <section id="panel-doc-anh" className="unified-panel unified-panel-image" role="tabpanel" aria-labelledby="tab-doc-anh" hidden={activeTab !== 'doc-anh'}>
         <WorkspaceV2 />
       </section>
-
-      <section
-        id="panel-tong-hop-lenh"
-        className="unified-panel unified-panel-monthly"
-        role="tabpanel"
-        aria-labelledby="tab-tong-hop-lenh"
-        hidden={activeTab !== 'tong-hop-lenh'}
-      >
+      <section id="panel-tong-hop-lenh" className="unified-panel unified-panel-monthly" role="tabpanel" aria-labelledby="tab-tong-hop-lenh" hidden={activeTab !== 'tong-hop-lenh'}>
         <MonthlyReportTool />
       </section>
-
-      <section
-        id="panel-bao-cao-tuan"
-        className="unified-panel unified-panel-weekly"
-        role="tabpanel"
-        aria-labelledby="tab-bao-cao-tuan"
-        hidden={activeTab !== 'bao-cao-tuan'}
-      >
+      <section id="panel-bao-cao-tuan" className="unified-panel unified-panel-weekly" role="tabpanel" aria-labelledby="tab-bao-cao-tuan" hidden={activeTab !== 'bao-cao-tuan'}>
         <WeeklyReportTool />
       </section>
     </div>

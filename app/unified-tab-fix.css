@@ -1,0 +1,15 @@
+.unified-tablist,
+.unified-tab {
+  pointer-events: auto;
+}
+
+.unified-tab {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  text-decoration: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
