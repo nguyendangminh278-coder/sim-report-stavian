@@ -1,0 +1,24 @@
+.unified-tablist.unified-tablist-five {
+  grid-template-columns: repeat(5, max-content);
+}
+
+@media (max-width: 900px) {
+  .unified-tablist.unified-tablist-five {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .unified-tablist.unified-tablist-five {
+    grid-template-columns: repeat(5, max-content);
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .unified-tablist-five .unified-tab {
+    min-width: 88px;
+    padding: 0 9px;
+    font-size: 10px;
+  }
+}
