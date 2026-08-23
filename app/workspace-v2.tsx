@@ -24,11 +24,7 @@ import {
   selectAiData,
   weightedPositionSummary,
 } from './lib/report-v2';
-import {
-  loadUserAiSettings,
-  saveUserAiSettings,
-  userSettingsErrorMessage,
-} from './lib/user-settings';
+import { DEFAULT_GEMINI_MODEL, loadLocalAiSettings, saveLocalAiSettings } from './lib/local-ai-settings';
 
 type QueueStatus = 'waiting' | 'reading' | 'done' | 'error';
 
@@ -267,7 +263,7 @@ function strictSchema(type: ImageType) {
   return schema;
 }
 
-export default function WorkspaceV2({ userId }: { userId: string }) {
+export default function WorkspaceV2() {
   const firstAccount = ACCOUNT_OPTIONS[1];
   const [accountName, setAccountName] = useState<string>(firstAccount.name);
   const [accountCode, setAccountCode] = useState<string>(firstAccount.code);
@@ -276,52 +272,24 @@ export default function WorkspaceV2({ userId }: { userId: string }) {
   const [operatorName, setOperatorName] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
-  const [model, setModel] = useState('gemini-3.5-flash-lite');
-  const [settingsLoading, setSettingsLoading] = useState(true);
-  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [model, setModel] = useState(DEFAULT_GEMINI_MODEL);
+
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [reports, setReports] = useState<AccountReport[]>([]);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
 
   useEffect(() => {
-    let active = true;
-    const legacyKey = localStorage.getItem('sim_report_gemini_key')
-      || sessionStorage.getItem('sim_report_gemini_key')
-      || '';
-    const legacyModel = localStorage.getItem('sim_report_model') || '';
-
-    setSettingsLoading(true);
-    void loadUserAiSettings(userId)
-      .then((settings) => {
-        if (!active) return;
-        if (settings?.geminiApiKey) {
-          setApiKey(settings.geminiApiKey);
-          if (settings.model) setModel(settings.model);
-          localStorage.removeItem('sim_report_gemini_key');
-          sessionStorage.removeItem('sim_report_gemini_key');
-          localStorage.removeItem('sim_report_model');
-          setToast('Đã tải cấu hình AI từ tài khoản Google');
-        } else {
-          if (legacyKey) setApiKey(legacyKey);
-          if (legacyModel) setModel(legacyModel);
-          if (legacyKey) setToast('Đã tìm thấy key cũ — bấm lưu để chuyển vào tài khoản Google');
-        }
-      })
-      .catch((error) => {
-        if (!active) return;
-        if (legacyKey) setApiKey(legacyKey);
-        if (legacyModel) setModel(legacyModel);
-        setToast(userSettingsErrorMessage(error));
-      })
-      .finally(() => {
-        if (active) setSettingsLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [userId]);
+    const settings = loadLocalAiSettings();
+    const timer = window.setTimeout(() => {
+      if (settings.geminiApiKey) {
+        setApiKey(settings.geminiApiKey);
+        setToast('Đã tải API Key từ trình duyệt này');
+      }
+      setModel(settings.model || DEFAULT_GEMINI_MODEL);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -342,7 +310,7 @@ export default function WorkspaceV2({ userId }: { userId: string }) {
     setFee(selected.fee);
   }
 
-  async function persistSettings() {
+  function persistSettings() {
     const nextKey = apiKey.trim();
     const nextModel = model.trim();
     if (!nextKey) {
@@ -354,20 +322,13 @@ export default function WorkspaceV2({ userId }: { userId: string }) {
       return;
     }
 
-    setSettingsSaving(true);
     try {
-      await saveUserAiSettings(userId, { geminiApiKey: nextKey, model: nextModel });
-      sessionStorage.removeItem('sim_report_gemini_key');
-      localStorage.removeItem('sim_report_gemini_key');
-      localStorage.removeItem('sim_report_model');
-      setToast('Đã lưu cấu hình vào tài khoản Google');
-    } catch (error) {
-      setToast(userSettingsErrorMessage(error));
-    } finally {
-      setSettingsSaving(false);
+      saveLocalAiSettings({ geminiApiKey: nextKey, model: nextModel });
+      setToast('Đã lưu API Key trên trình duyệt này');
+    } catch {
+      setToast('Trình duyệt không cho phép lưu API Key cục bộ.');
     }
   }
-
   async function callGemini(file: File, expectedType: ImageType): Promise<AiResult> {
     const key = apiKey.trim();
     const modelId = model.trim();
@@ -711,15 +672,15 @@ export default function WorkspaceV2({ userId }: { userId: string }) {
 
         <aside className="settings-panel">
           <div className="section-heading compact"><span className="section-number">AI</span><div><p>Cấu hình miễn phí</p><h2>Gemini Vision</h2></div></div>
-          <label className="field"><span>Gemini API Key</span><div className="key-field"><input type={showKey ? 'text' : 'password'} value={apiKey} placeholder="AIza…" autoComplete="off" spellCheck={false} disabled={settingsLoading} onChange={(event) => setApiKey(event.target.value)} /><button type="button" onClick={() => setShowKey((value) => !value)}>{showKey ? 'Ẩn' : 'Hiện'}</button></div></label>
-          <label className="field"><span>Model</span><input value={model} disabled={settingsLoading} onChange={(event) => setModel(event.target.value)} /></label>
+          <label className="field"><span>Gemini API Key</span><div className="key-field"><input type={showKey ? 'text' : 'password'} value={apiKey} placeholder="AIza…" autoComplete="off" spellCheck={false} onChange={(event) => setApiKey(event.target.value)} /><button type="button" onClick={() => setShowKey((value) => !value)}>{showKey ? 'Ẩn' : 'Hiện'}</button></div></label>
+          <label className="field"><span>Model</span><input value={model} onChange={(event) => setModel(event.target.value)} /></label>
           <div className="cloud-save-note">
             <span aria-hidden="true" />
-            <div><strong>{settingsLoading ? 'Đang tải cấu hình…' : 'Đồng bộ theo tài khoản'}</strong><p>API key được lưu riêng cho tài khoản Google đang đăng nhập.</p></div>
+            <div><strong>{apiKey.trim() ? 'API Key đã nhập' : 'Lưu cục bộ trên thiết bị'}</strong><p>Không cần đăng nhập. Khóa chỉ được lưu trên trình duyệt này.</p></div>
           </div>
-          <button className="button button-outline" disabled={settingsLoading || settingsSaving || !apiKey.trim()} onClick={() => void persistSettings()}>{settingsSaving ? 'Đang lưu…' : 'Lưu vào tài khoản Google'}</button>
+          <button className="button button-outline" disabled={!apiKey.trim()} onClick={persistSettings}>Lưu trên trình duyệt</button>
           <a className="text-link" href="https://aistudio.google.com/api-keys" target="_blank" rel="noreferrer">Tạo API Key miễn phí ↗</a>
-          <div className="privacy-note"><strong>Ranh giới dữ liệu</strong><p>API key không còn lưu trong localStorage. Ảnh vẫn được gửi trực tiếp từ trình duyệt tới Google bằng key của bạn.</p></div>
+          <div className="privacy-note"><strong>Ranh giới dữ liệu</strong><p>API Key được lưu trong localStorage của trình duyệt này và chỉ được gửi trực tiếp tới Gemini khi xử lý dữ liệu.</p></div>
           <div className="rule-note"><strong>Công thức đang áp dụng</strong><code>Tấn = lot × 25</code><code>Tổng phí = tấn × phí × 2</code><code>Long: (đóng − mở) × tấn</code><code>Short: (mở − đóng) × tấn</code><p>Yêu cầu mới đã thay thế công thức một lượt trước đây.</p></div>
         </aside>
       </section>

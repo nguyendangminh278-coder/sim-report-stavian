@@ -1,13 +1,6 @@
 'use client';
 
 import { KeyboardEvent, MouseEvent, useEffect, useRef, useState } from 'react';
-import { onAuthStateChanged, type User } from 'firebase/auth';
-import {
-  getFirebaseAuth,
-  isFirebaseConfigured,
-  signInWithGoogle,
-  signOutCurrentUser,
-} from './lib/firebase-client';
 import WorkspaceV2 from './workspace-v2';
 import MonthlyReportTool from './tong-hop-lenh/monthly-tool';
 import WeeklyReportTool from './bao-cao-tuan/weekly-tool';
@@ -33,73 +26,11 @@ function tabFromLocation(fallback: UnifiedTabId): UnifiedTabId {
   return TABS.some((tab) => tab.id === value) ? value as UnifiedTabId : fallback;
 }
 
-function authErrorMessage(error: unknown) {
-  const code = typeof error === 'object' && error && 'code' in error
-    ? String((error as { code?: unknown }).code || '')
-    : '';
-  if (code === 'auth/popup-closed-by-user') return 'Cửa sổ đăng nhập đã được đóng trước khi hoàn tất.';
-  if (code === 'auth/popup-blocked') return 'Trình duyệt đang chặn cửa sổ đăng nhập Google.';
-  if (code === 'auth/unauthorized-domain') return 'Tên miền website chưa được cho phép trong Firebase Authentication.';
-  if (code === 'auth/operation-not-allowed') return 'Đăng nhập Google chưa được bật trong Firebase Authentication.';
-  return 'Chưa thể đăng nhập Google. Vui lòng thử lại.';
-}
-
-function LoginScreen({
-  ready,
-  busy,
-  error,
-  onSignIn,
-}: {
-  ready: boolean;
-  busy: boolean;
-  error: string;
-  onSignIn: () => void;
-}) {
-  return (
-    <main className="auth-shell">
-      <section className="auth-card" aria-labelledby="auth-title">
-        <div className="auth-brand"><span aria-hidden="true">S</span><div><strong>SIM Report</strong><small>Stavian Industrial Metal</small></div></div>
-        <p className="auth-eyebrow">Không gian báo cáo cá nhân</p>
-        <h1 id="auth-title">Đăng nhập để tiếp tục</h1>
-        <p className="auth-lead">Mỗi người dùng đăng nhập bằng Google và có cấu hình Gemini API riêng. Dữ liệu của người này không được dùng cho tài khoản khác.</p>
-        {error ? <div className="auth-error" role="alert">{error}</div> : null}
-        <button className="google-signin" type="button" disabled={!ready || busy || !isFirebaseConfigured} onClick={onSignIn}>
-          <span aria-hidden="true">G</span>
-          {busy ? 'Đang mở Google…' : ready ? 'Đăng nhập bằng Google' : 'Đang kiểm tra phiên đăng nhập…'}
-        </button>
-        <p className="auth-footnote">Website chỉ dùng tài khoản Google để xác định đúng chủ sở hữu cấu hình. Ảnh giao dịch vẫn được xử lý trực tiếp trên trình duyệt.</p>
-      </section>
-    </main>
-  );
-}
-
 export default function UnifiedDashboard({ initialTab = 'doc-anh' }: { initialTab?: UnifiedTabId }) {
   const [activeTab, setActiveTab] = useState<UnifiedTabId>(initialTab);
-  const [user, setUser] = useState<User | null>(null);
-  const [authReady, setAuthReady] = useState(!isFirebaseConfigured);
-  const [authBusy, setAuthBusy] = useState(false);
-  const [authError, setAuthError] = useState(
-    isFirebaseConfigured ? '' : 'Firebase chưa được cấu hình cho website này.',
-  );
   const tabRefs = useRef<Array<HTMLAnchorElement | null>>([]);
   const [aggregatedTrades, setAggregatedTrades] = useState<TradeRecord[]>([]);
   const [aggregatedMonthLabel, setAggregatedMonthLabel] = useState('');
-
-  useEffect(() => {
-    const auth = getFirebaseAuth();
-    if (!auth) return;
-    return onAuthStateChanged(
-      auth,
-      (nextUser) => {
-        setUser(nextUser);
-        setAuthReady(true);
-      },
-      (error) => {
-        setAuthError(authErrorMessage(error));
-        setAuthReady(true);
-      },
-    );
-  }, []);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -136,22 +67,6 @@ export default function UnifiedDashboard({ initialTab = 'doc-anh' }: { initialTa
     tabRefs.current[nextIndex]?.focus();
   };
 
-  const handleSignIn = async () => {
-    setAuthBusy(true);
-    setAuthError('');
-    try {
-      await signInWithGoogle();
-    } catch (error) {
-      setAuthError(authErrorMessage(error));
-    } finally {
-      setAuthBusy(false);
-    }
-  };
-
-  if (!authReady || !user) {
-    return <LoginScreen ready={authReady} busy={authBusy} error={authError} onSignIn={() => void handleSignIn()} />;
-  }
-
   return (
     <div className="unified-app">
       <header className="unified-header">
@@ -185,19 +100,20 @@ export default function UnifiedDashboard({ initialTab = 'doc-anh' }: { initialTa
           </nav>
 
           <div className="unified-account">
-            <span className="unified-account-fallback" aria-hidden="true">{(user.displayName || user.email || 'U').slice(0, 1).toUpperCase()}</span>
-            <span className="unified-account-copy"><strong>{user.displayName || 'Tài khoản Google'}</strong><small>{user.email || 'Đã đăng nhập'}</small></span>
-            <button type="button" onClick={() => void signOutCurrentUser()}>Đăng xuất</button>
+            <span className="unified-account-fallback" aria-hidden="true">AI</span>
+            <span className="unified-account-copy">
+              <strong>Không cần đăng nhập</strong>
+              <small>API Key lưu trên trình duyệt này</small>
+            </span>
           </div>
         </div>
       </header>
 
       <section id="panel-doc-anh" className="unified-panel unified-panel-image" role="tabpanel" aria-labelledby="tab-doc-anh" hidden={activeTab !== 'doc-anh'}>
-        <WorkspaceV2 userId={user.uid} />
+        <WorkspaceV2 />
       </section>
       <section id="panel-tong-hop-lenh" className="unified-panel unified-panel-monthly" role="tabpanel" aria-labelledby="tab-tong-hop-lenh" hidden={activeTab !== 'tong-hop-lenh'}>
         <MonthlyReportTool
-          userId={user.uid}
           onAggregated={(trades, monthLabel) => {
             setAggregatedTrades(trades);
             setAggregatedMonthLabel(monthLabel);
@@ -207,7 +123,6 @@ export default function UnifiedDashboard({ initialTab = 'doc-anh' }: { initialTa
       <section id="panel-bao-cao-tuan" className="unified-panel unified-panel-weekly" role="tabpanel" aria-labelledby="tab-bao-cao-tuan" hidden={activeTab !== 'bao-cao-tuan'}>
         <WeeklyReportTool
           key={aggregatedTrades.map((trade) => [trade.sourceSheet, trade.sourceRow, trade.pnlAfterFee].join(':')).join('|') || 'empty'}
-          userId={user.uid}
           trades={aggregatedTrades}
           monthLabel={aggregatedMonthLabel}
           onOpenMonthly={() => selectTab('tong-hop-lenh')}

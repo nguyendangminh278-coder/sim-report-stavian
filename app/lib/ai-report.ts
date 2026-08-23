@@ -1,7 +1,7 @@
 'use client';
 
 import type { TradeRecord } from './excel-report';
-import { loadUserAiSettings, userSettingsErrorMessage } from './user-settings.ts';
+import { loadLocalAiSettings } from './local-ai-settings.ts';
 
 type GeminiSchema = Record<string, unknown>;
 
@@ -267,23 +267,16 @@ function monthLabelFromTrades(trades: TradeRecord[]) {
 }
 
 async function callGeminiJson<T>(
-  userId: string,
   prompt: string,
   schema: GeminiSchema,
   maxOutputTokens: number,
 ): Promise<T> {
-  let settings;
-  try {
-    settings = await loadUserAiSettings(userId);
-  } catch (error) {
-    throw new Error(userSettingsErrorMessage(error));
-  }
-  const apiKey = settings?.geminiApiKey?.trim();
-  const model = settings?.model?.trim();
+  const settings = loadLocalAiSettings();
+  const apiKey = settings.geminiApiKey.trim();
+  const model = settings.model.trim();
   if (!apiKey || !model) {
-    throw new Error('Chưa có Gemini API Key. Vào phần Đọc ảnh → Cấu hình AI để lưu API Key cho tài khoản Google này.');
+    throw new Error('Chưa có Gemini API Key. Vào phần Đọc ảnh → Cấu hình AI để nhập và lưu khóa trên trình duyệt này.');
   }
-
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
     {
@@ -400,7 +393,6 @@ ${JSON.stringify(chunk)}`;
 
 export async function extractSettledTradesWithAi(
   input: ArrayBuffer,
-  userId: string,
   onProgress?: (done: number, total: number) => void,
 ): Promise<AiTradeExtraction> {
   const sheets = await serializeDailySheets(input);
@@ -412,7 +404,7 @@ export async function extractSettledTradesWithAi(
   const warnings: string[] = [];
   for (let index = 0; index < chunks.length; index += 1) {
     const result = await callGeminiJson<RawAiExtraction>(
-      userId,
+
       extractionPrompt(chunks[index]),
       EXTRACTION_SCHEMA,
       32768,
@@ -437,7 +429,7 @@ export async function extractSettledTradesWithAi(
 
 export async function reviewWeeklyTradesWithAi(
   sourceTrades: TradeRecord[],
-  userId: string,
+
 ): Promise<WeeklyAiReview> {
   if (!sourceTrades.length) throw new Error('Chưa có dữ liệu tổng hợp lệnh để lập báo cáo tuần.');
   const compactRows = sourceTrades.map((trade, rowIndex) => ({
@@ -455,7 +447,7 @@ export async function reviewWeeklyTradesWithAi(
     rows?: Array<{ rowIndex: number; trader: string; account: string; commodity: string }>;
     notes?: string[];
   }>(
-    userId,
+
     `Bạn là AI kiểm tra dữ liệu báo cáo tuần LME. Dữ liệu đầu vào bên dưới CHỈ gồm các lệnh đã hạch toán từ bảng Tổng hợp lệnh.
 
 Nhiệm vụ duy nhất:

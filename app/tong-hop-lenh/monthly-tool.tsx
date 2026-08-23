@@ -128,10 +128,10 @@ function fileSlug(value: string) {
 }
 
 export default function MonthlyReportPage({
-  userId,
+
   onAggregated,
 }: {
-  userId: string;
+
   onAggregated: (trades: TradeRecord[], monthLabel: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -205,7 +205,7 @@ export default function MonthlyReportPage({
     try {
       const parsed = await extractSettledTradesWithAi(
         await file.arrayBuffer(),
-        userId,
+
         (done, total) => setAiProgress('Gemini đang đọc nhóm ' + done + '/' + total + '…'),
       );
       setRecords(parsed.trades);
@@ -620,5 +620,4 @@ export default function MonthlyReportPage({
     </main>
   );
 }
-
 

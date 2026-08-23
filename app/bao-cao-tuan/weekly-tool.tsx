@@ -138,12 +138,12 @@ async function writeClipboard(value: string) {
 }
 
 export default function WeeklyReportPage({
-  userId,
+
   trades,
   monthLabel,
   onOpenMonthly,
 }: {
-  userId: string;
+
   trades: TradeRecord[];
   monthLabel: string;
   onOpenMonthly: () => void;
@@ -154,7 +154,6 @@ export default function WeeklyReportPage({
   const [isExporting, setIsExporting] = useState(false);
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'error'>('idle');
   const [error, setError] = useState('');
-
 
   const periods = useMemo<Period[]>(() => reviewedTrades
     ? buildWorkweekBuckets(reviewedTrades).map(({ key, label, startDate, endDate }) => ({ key, label, startDate, endDate }))
@@ -175,7 +174,7 @@ export default function WeeklyReportPage({
     setIsLoading(true);
     setError('');
     try {
-      const result = await reviewWeeklyTradesWithAi(trades, userId);
+      const result = await reviewWeeklyTradesWithAi(trades);
       setReviewedTrades(result.trades);
       setNotes(result.notes);
     } catch (cause) {
