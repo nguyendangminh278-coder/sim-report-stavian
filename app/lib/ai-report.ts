@@ -1,6 +1,6 @@
 'use client';
 
-import type { TradeRecord } from './excel-report';
+import { parseSimWorkbook, type TradeRecord } from './excel-report.ts';
 import { loadLocalAiSettings } from './local-ai-settings.ts';
 
 type GeminiSchema = Record<string, unknown>;
@@ -204,9 +204,23 @@ export function normalizeSettledTradeFromAi(raw: AiExtractedTrade): TradeRecord 
   const openDate = isoDate(raw.openDate);
   const closeDate = isoDate(raw.closeDate);
   const contractCode = String(raw.contractCode || '').trim();
+  const sourceStt = String(raw.sourceStt || '').trim();
+  const sourceRow = asNumber(raw.sourceRow);
 
-  // A settled trade must have both sides, a close date and a positive quantity.
-  if (!openDate || !closeDate || !contractCode || openPrice === null || closePrice === null || !lots || lots <= 0) {
+  // A settled row must be a numbered line in the accounting table. Blank-STT
+  // rows are stale worksheet remnants and must never be inferred as trades.
+  if (
+    !/^[1-9]\d*$/.test(sourceStt) ||
+    sourceRow === null ||
+    sourceRow <= 0 ||
+    !openDate ||
+    !closeDate ||
+    !contractCode ||
+    openPrice === null ||
+    closePrice === null ||
+    !lots ||
+    lots <= 0
+  ) {
     return null;
   }
   if (position !== 'Long' && position !== 'Short') return null;
@@ -224,8 +238,8 @@ export function normalizeSettledTradeFromAi(raw: AiExtractedTrade): TradeRecord 
     bank: bankForAccount(account),
     account,
     sourceSheet: String(raw.sourceSheet || '').trim(),
-    sourceRow: asNumber(raw.sourceRow) ?? String(raw.sourceRow || '').trim(),
-    sourceStt: String(raw.sourceStt || '').trim(),
+    sourceRow,
+    sourceStt,
     trader: String(raw.trader || '').trim(),
     openDate,
     closeDate,
@@ -245,18 +259,57 @@ export function normalizeSettledTradeFromAi(raw: AiExtractedTrade): TradeRecord 
   };
 }
 
+function sourceLocationKey(trade: Pick<TradeRecord, 'sourceSheet' | 'sourceRow'>) {
+  return `${normalizeText(trade.sourceSheet)}|${String(trade.sourceRow).trim()}`;
+}
+
 function deduplicateTrades(trades: TradeRecord[]) {
   const seen = new Set<string>();
   return trades.filter((trade) => {
-    const key = [
-      trade.sourceSheet, trade.sourceRow, trade.sourceStt, trade.account, trade.trader,
-      trade.openDate, trade.closeDate, trade.contractCode, trade.position,
-      trade.openPrice, trade.closePrice, trade.lots,
-    ].join('|');
+    const key = sourceLocationKey(trade);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+}
+
+function mergeAiLabelsIntoSource(source: TradeRecord, aiTrade: TradeRecord): TradeRecord {
+  const account = canonicalAccount(source.account || aiTrade.account);
+  const trader = source.trader.trim() || aiTrade.trader.trim();
+  const commodity = commodityFor(source.contractCode, source.commodity || aiTrade.commodity);
+
+  // Excel's settled row is the financial source of truth. AI may fill labels,
+  // but it must never alter dates, quantities, fees or P&L.
+  return {
+    ...source,
+    account,
+    bank: source.bank || bankForAccount(account),
+    trader,
+    commodity,
+  };
+}
+
+export function reconcileExtractedTrades(
+  sourceTrades: TradeRecord[],
+  aiTrades: TradeRecord[],
+): { trades: TradeRecord[]; missingFromAi: number; extraFromAi: number } {
+  const sourceRows = deduplicateTrades(sourceTrades);
+  const aiRows = deduplicateTrades(aiTrades);
+  if (!sourceRows.length) return { trades: aiRows, missingFromAi: 0, extraFromAi: 0 };
+
+  const aiByLocation = new Map(aiRows.map((trade) => [sourceLocationKey(trade), trade]));
+  const sourceLocations = new Set(sourceRows.map(sourceLocationKey));
+  let missingFromAi = 0;
+  const trades = sourceRows.map((source) => {
+    const aiTrade = aiByLocation.get(sourceLocationKey(source));
+    if (!aiTrade) {
+      missingFromAi += 1;
+      return source;
+    }
+    return mergeAiLabelsIntoSource(source, aiTrade);
+  });
+  const extraFromAi = aiRows.filter((trade) => !sourceLocations.has(sourceLocationKey(trade))).length;
+  return { trades, missingFromAi, extraFromAi };
 }
 
 function monthLabelFromTrades(trades: TradeRecord[]) {
@@ -448,6 +501,8 @@ QUY TẮC BẮT BUỘC:
 - Chuẩn hóa PG BP 8668 thành PG BP 668 và PG/PB BP 8888 thành PG BP 888.
 - Ô gộp "Người thực hiện" áp dụng cho các dòng lệnh liên tiếp trong cùng khối bảng.
 - sourceSheet phải đúng tên sheet; sourceRow là số dòng Excel; sourceStt là STT nhìn thấy trong bảng.
+- Chỉ xuất dòng có sourceStt là số nguyên dương nhìn thấy rõ. STT trống hoặc 0 thì bỏ qua, tuyệt đối không tự điền STT.
+- Hai dòng có dữ liệu giống hệt nhưng sourceRow khác nhau là hai giao dịch thật: phải xuất đủ cả hai, không gộp và không loại trùng.
 - reportDate lấy từ ngày báo cáo/tên sheet, định dạng YYYY-MM-DD. Các ngày khác cũng dùng YYYY-MM-DD.
 - Không tự đoán dữ liệu. Trường không nhìn thấy để chuỗi rỗng.
 - Số dùng dấu chấm thập phân, không có dấu phân tách hàng nghìn.
@@ -463,6 +518,7 @@ export async function extractSettledTradesWithAi(
   input: ArrayBuffer,
   onProgress?: (done: number, total: number) => void,
 ): Promise<AiTradeExtraction> {
+  const parsedSource = await parseSimWorkbook(input);
   const sheets = await serializeDailySheets(input);
   if (!sheets.length) {
     throw new Error('Không tìm thấy sheet ngày trong workbook. AI chỉ đọc các sheet ngày để tránh lấy lại bảng tổng hợp cũ.');
@@ -481,11 +537,15 @@ export async function extractSettledTradesWithAi(
     warnings.push(...(result.warnings || []));
     onProgress?.(index + 1, chunks.length);
   }
-  const trades = deduplicateTrades(
+  const normalizedAiTrades = deduplicateTrades(
     rawTrades.map(normalizeSettledTradeFromAi).filter((trade): trade is TradeRecord => Boolean(trade)),
-  ).sort((a, b) => `${a.reportDate}|${a.sourceSheet}|${a.sourceRow}`.localeCompare(`${b.reportDate}|${b.sourceSheet}|${b.sourceRow}`, 'vi'));
-  const rejected = rawTrades.length - trades.length;
-  if (rejected > 0) warnings.push(`${rejected} dòng AI trả về đã bị loại vì thiếu điều kiện của lệnh đã hạch toán hoặc bị trùng.`);
+  );
+  const reconciled = reconcileExtractedTrades(parsedSource.trades, normalizedAiTrades);
+  const trades = reconciled.trades.sort((a, b) => `${a.reportDate}|${a.sourceSheet}|${a.sourceRow}`.localeCompare(`${b.reportDate}|${b.sourceSheet}|${b.sourceRow}`, 'vi'));
+  const rejected = rawTrades.length - normalizedAiTrades.length;
+  if (rejected > 0) warnings.push(`${rejected} dòng AI trả về đã bị loại vì STT trống, thiếu điều kiện hạch toán hoặc trùng dòng gốc.`);
+  if (reconciled.missingFromAi > 0) warnings.push(`AI bỏ sót ${reconciled.missingFromAi} dòng có STT hợp lệ; website đã khôi phục đúng theo dòng Excel gốc.`);
+  if (reconciled.extraFromAi > 0) warnings.push(`AI trả thêm ${reconciled.extraFromAi} dòng không khớp STT/dòng Excel hợp lệ; website đã loại khỏi kết quả.`);
   if (!trades.length) warnings.push('AI không tìm thấy lệnh đã hạch toán hợp lệ trong các sheet ngày.');
   return {
     trades,

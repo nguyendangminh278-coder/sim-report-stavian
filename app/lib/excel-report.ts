@@ -184,9 +184,10 @@ export async function parseSimWorkbook(input: ArrayBuffer): Promise<ParsedSimWor
   await workbook.xlsx.load(input as never);
 
   const warnings: string[] = [];
-  const summarySheet = workbook.worksheets.find((sheet) =>
-    normalizeText(sheet.name).includes("tong hop lenh"),
-  );
+  const summarySheet = workbook.worksheets.find((sheet) => {
+    const normalizedName = normalizeText(sheet.name);
+    return normalizedName.includes("tong hop lenh") || normalizedName.includes("tong hop hach toan");
+  });
 
   let trades: TradeRecord[] = [];
   let sourceMode: ParsedSimWorkbook["sourceMode"] = "daily-sheets";
@@ -404,10 +405,9 @@ function parseDailySheets(sheets: ExcelWorksheet[]): {
 
         const traderValue = asString(get("trader"));
         if (traderValue && normalizeText(traderValue) !== "tong") carriedTrader = traderValue;
-        const reportDate = context.reportDate || inferReportDateFromData(
-          get("openDate"),
-          get("closeDate"),
-        );
+        const rawOpenDate = get("openDate");
+        const rawCloseDate = get("closeDate");
+        const reportDate = resolveDailyReportDate(context.reportDate, rawOpenDate, rawCloseDate);
         const position = normalizePosition(asString(get("position")));
         const lots = asNumber(get("lots"));
         const tonnes = asNumber(get("tonnes")) ?? (lots === null ? null : lots * 25);
@@ -432,8 +432,8 @@ function parseDailySheets(sheets: ExcelWorksheet[]): {
           sourceRow: rowNumber,
           sourceStt: numberOrString(get("sourceStt")),
           trader: traderValue || carriedTrader,
-          openDate: toIsoDate(get("openDate")),
-          closeDate: toIsoDate(get("closeDate")),
+          openDate: toIsoDate(rawOpenDate),
+          closeDate: toIsoDate(rawCloseDate),
           expiryDate: toIsoDate(get("expiryDate")),
           contractCode: asString(get("contractCode")),
           commodity:
@@ -450,10 +450,12 @@ function parseDailySheets(sheets: ExcelWorksheet[]): {
           pnlAfterFee,
         };
 
-        if (isTradeRow(record)) trades.push(record);
+        if (isDailySettledTradeRow(record)) trades.push(record);
       }
     }
   }
+
+  normalizeDailyReportDates(trades);
 
   if (trades.length > 0) {
     warnings.push(
@@ -729,6 +731,25 @@ function isTradeRow(record: TradeRecord): boolean {
   );
 }
 
+function isPositiveTradeStt(value: number | string): boolean {
+  return /^[1-9]\d*$/.test(String(value).trim());
+}
+
+function isDailySettledTradeRow(record: TradeRecord): boolean {
+  return Boolean(
+    isPositiveTradeStt(record.sourceStt) &&
+      record.openDate &&
+      record.closeDate &&
+      record.contractCode &&
+      ["long", "short"].includes(normalizeText(record.position)) &&
+      record.openPrice !== null &&
+      record.closePrice !== null &&
+      record.lots !== null &&
+      record.lots > 0 &&
+      record.pnlAfterFee !== null,
+  );
+}
+
 function inferDailyContext(
   sheet: ExcelWorksheet,
   headerRow: number,
@@ -907,6 +928,42 @@ function toIsoDate(value: unknown): string {
 
 function inferReportDateFromData(openDate: unknown, closeDate: unknown): string {
   return toIsoDate(closeDate) || toIsoDate(openDate);
+}
+
+function resolveDailyReportDate(
+  sheetDate: string,
+  openDate: unknown,
+  closeDate: unknown,
+): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(sheetDate)) return sheetDate;
+  const partial = sheetDate.match(/^(\d{2})-(\d{2})$/);
+  const datedValue = inferReportDateFromData(openDate, closeDate);
+  const year = datedValue.match(/^(\d{4})-/)?.[1];
+  if (partial && year) return `${year}-${partial[1]}-${partial[2]}`;
+  return datedValue;
+}
+
+function normalizeDailyReportDates(trades: TradeRecord[]): void {
+  const yearFrequency = new Map<number, number>();
+  for (const trade of trades) {
+    for (const value of [trade.reportDate, trade.openDate, trade.closeDate, trade.expiryDate]) {
+      const match = value.match(/^(\d{4})-/);
+      if (!match) continue;
+      const year = Number(match[1]);
+      if (year >= 2000 && year <= 2100) {
+        yearFrequency.set(year, (yearFrequency.get(year) || 0) + 1);
+      }
+    }
+  }
+  const dominantYear = [...yearFrequency.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  if (!dominantYear) return;
+
+  for (const trade of trades) {
+    const partial = parseDateFromSheetName(trade.sourceSheet).match(/^(\d{2})-(\d{2})$/);
+    if (partial) {
+      trade.reportDate = isoFromParts(dominantYear, Number(partial[1]), Number(partial[2]));
+    }
+  }
 }
 
 function parseDateFromSheetName(sheetName: string): string {

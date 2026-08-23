@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import ExcelJS from 'exceljs';
-import { parseSimWorkbook } from '../app/lib/excel-report.ts';
+import { buildWorkweekBuckets, parseSimWorkbook } from '../app/lib/excel-report.ts';
 
 const HEADERS = [
   'Ngày báo cáo', 'Ngân hàng', 'Tài khoản', 'Sheet gốc', 'Dòng gốc', 'STT gốc',
@@ -53,6 +53,47 @@ test('đọc đúng bảng 22 cột và kết quả cached của ô công thức
   assert.equal(trade.totalFee, 33);
   assert.equal(trade.pnlBeforeFee, -187.5);
   assert.equal(trade.pnlAfterFee, -220.5);
+});
+
+test('file tháng 7 chỉ lấy STT hợp lệ, giữ dòng trùng và gán đúng năm báo cáo', async () => {
+  const workbook = new ExcelJS.Workbook();
+  const headers = [
+    'STT', 'Người thực hiện', 'Ngày mở lệnh', 'Ngày tất toán', 'Ngày đáo hạn',
+    'Mã hợp đồng', 'Mặt hàng', 'Vị thế', 'Giá mở', 'Giá đóng',
+    'Khối lượng quy đổi (lot)', 'Khối lượng quy đổi (tấn)', 'Phí giao dịch (usd/mt)',
+    'Tổng phí/lệnh', 'Giá carry (usd/mt)', 'Lợi nhuận chưa phí giao dịch',
+    'Lợi nhuận sau phí giao dịch',
+  ];
+  const addDay = (name: string, rows: unknown[][]) => {
+    const sheet = workbook.addWorksheet(name);
+    sheet.addRow(['HẠCH TOÁN LỢI NHUẬN GIAO DỊCH - PG BP 8668']);
+    sheet.addRow(headers);
+    rows.forEach((row) => sheet.addRow(row));
+  };
+  const row = (stt: number | string, day: number, open: number, close: number, pnl: number) => [
+    stt, 'C Phương', new Date(2026, 6, day), new Date(2026, 6, day),
+    new Date(2026, 6, 10), 'LALZ', 'Nhôm', 'Long', open, close, 1, 25,
+    0.572, 28.6, '', (close - open) * 25, pnl,
+  ];
+  addDay('Ngày 07.07', [row(1, 7, 3148, 3149, -3.6), row(2, 7, 3148, 3149, -3.6)]);
+  addDay('Ngày 08.07', [row('', 8, 3130, 3129.5, -41.1), row(1, 8, 3151.5, 3151, -41.1), row(2, 8, 3151.5, 3151, -41.1)]);
+  addDay('Ngày 10.07', [row('', 10, 3613, 3615, 21.4)]);
+  addDay('Ngày 13.07', [[
+    1, 'Đức', '13/07', '13/07', new Date(2026, 9, 10), 'LALZ', 'Nhôm',
+    'Long', 3200, 3200, 1, 25, 0.572, 28.6, '', 0, -28.6,
+  ]]);
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const parsed = await parseSimWorkbook(buffer as ArrayBuffer);
+  assert.equal(parsed.sourceMode, 'daily-sheets');
+  assert.equal(parsed.trades.length, 5);
+  assert.deepEqual(parsed.trades.map((trade) => trade.reportDate), [
+    '2026-07-07', '2026-07-07', '2026-07-08', '2026-07-08', '2026-07-13',
+  ]);
+  const week = buildWorkweekBuckets(parsed.trades).find((bucket) => bucket.label === '06.07 - 10.07');
+  assert.ok(week);
+  assert.equal(week.trades.length, 4);
+  assert.equal(week.trades.reduce((sum, trade) => sum + (trade.pnlAfterFee ?? 0), 0), -89.4);
 });
 
 test('giữ OTE, KPI, NOTE và dữ liệu tháng từ sheet báo cáo tuần', async () => {

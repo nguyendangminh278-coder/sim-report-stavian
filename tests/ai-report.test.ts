@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   normalizeSettledTradeFromAi,
+  reconcileExtractedTrades,
   serializeDailySheets,
   type AiExtractedTrade,
 } from '../app/lib/ai-report.ts';
@@ -32,6 +33,11 @@ test('AI chỉ nhận lệnh đã có ngày tất toán và đủ hai giá', () 
   assert.equal(normalizeSettledTradeFromAi(settledLong)?.closeDate, '2026-08-21');
 });
 
+test('AI không được suy đoán dòng hạch toán khi STT hoặc dòng gốc bị trống', () => {
+  assert.equal(normalizeSettledTradeFromAi({ ...settledLong, sourceStt: '' }), null);
+  assert.equal(normalizeSettledTradeFromAi({ ...settledLong, sourceRow: '' }), null);
+});
+
 test('đối soát phí hai lượt và P&L sau phí từ dữ liệu AI', () => {
   const trade = normalizeSettledTradeFromAi(settledLong);
   assert.ok(trade);
@@ -41,6 +47,17 @@ test('đối soát phí hai lượt và P&L sau phí từ dữ liệu AI', () =>
   assert.equal(trade.pnlBeforeFee, -187.5);
   assert.equal(trade.pnlAfterFee, -220.5);
   assert.equal(trade.commodity, 'Nhôm');
+});
+
+test('đối soát theo dòng gốc giữ đủ hai giao dịch giống nhau khi AI bỏ sót một dòng', () => {
+  const first = normalizeSettledTradeFromAi(settledLong);
+  const second = normalizeSettledTradeFromAi({ ...settledLong, sourceRow: '25', sourceStt: '2' });
+  assert.ok(first && second);
+  const reconciled = reconcileExtractedTrades([first, second], [first]);
+  assert.equal(reconciled.trades.length, 2);
+  assert.equal(reconciled.missingFromAi, 1);
+  assert.equal(reconciled.extraFromAi, 0);
+  assert.equal(reconciled.trades.reduce((sum, trade) => sum + (trade.pnlAfterFee ?? 0), 0), -441);
 });
 
 test('chuẩn hóa mã tài khoản PG BP trong workbook mẫu', () => {
