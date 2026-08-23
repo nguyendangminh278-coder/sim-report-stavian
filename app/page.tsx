@@ -1,17 +1,18 @@
-import Link from 'next/link';
 import './report-upgrade.css';
-import './tool-navigation.css';
-import WorkspaceV2 from './workspace-v2';
+import './unified-dashboard.css';
+import UnifiedDashboard, { type UnifiedTabId } from './unified-dashboard';
 
-export default function Home() {
-  return (
-    <>
-      <nav className="tool-hub-nav" aria-label="Công cụ báo cáo">
-        <Link className="active" href="/">Đọc ảnh</Link>
-        <Link href="/tong-hop-lenh">Tổng hợp lệnh</Link>
-        <Link href="/bao-cao-tuan">Báo cáo tuần</Link>
-      </nav>
-      <WorkspaceV2 />
-    </>
-  );
+type HomeProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function normalizeTab(value: string | string[] | undefined): UnifiedTabId {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (candidate === 'tong-hop-lenh' || candidate === 'bao-cao-tuan') return candidate;
+  return 'doc-anh';
+}
+
+export default async function Home({ searchParams }: HomeProps) {
+  const params = await searchParams;
+  return <UnifiedDashboard initialTab={normalizeTab(params.tab)} />;
 }
