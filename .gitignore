@@ -30,6 +30,7 @@ yarn-error.log*
 
 # local environment and secrets
 .env*
+!.env.example
 
 # deployment and generated files
 .vercel

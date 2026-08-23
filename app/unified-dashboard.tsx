@@ -1,6 +1,7 @@
 'use client';
 
 import { KeyboardEvent, MouseEvent, useEffect, useRef, useState } from 'react';
+import { getFirebaseApp } from './lib/firebase-client';
 import WorkspaceV2 from './workspace-v2';
 import MonthlyReportTool from './tong-hop-lenh/monthly-tool';
 import WeeklyReportTool from './bao-cao-tuan/weekly-tool';
@@ -28,6 +29,10 @@ function tabFromLocation(fallback: UnifiedTabId): UnifiedTabId {
 export default function UnifiedDashboard({ initialTab = 'doc-anh' }: { initialTab?: UnifiedTabId }) {
   const [activeTab, setActiveTab] = useState<UnifiedTabId>(initialTab);
   const tabRefs = useRef<Array<HTMLAnchorElement | null>>([]);
+
+  useEffect(() => {
+    getFirebaseApp();
+  }, []);
 
   useEffect(() => {
     const handlePopState = () => {
