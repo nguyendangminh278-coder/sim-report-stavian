@@ -4,15 +4,17 @@ import { KeyboardEvent, MouseEvent, useEffect, useRef, useState } from 'react';
 import WorkspaceV2 from './workspace-v2';
 import MonthlyReportTool from './tong-hop-lenh/monthly-tool';
 import WeeklyReportTool from './bao-cao-tuan/weekly-tool';
+import NewsTool from './tin-tuc/news-tool';
 import type { TradeRecord } from './lib/excel-report';
 import './unified-tab-fix.css';
 
-export type UnifiedTabId = 'doc-anh' | 'tong-hop-lenh' | 'bao-cao-tuan';
+export type UnifiedTabId = 'doc-anh' | 'tong-hop-lenh' | 'bao-cao-tuan' | 'tin-tuc';
 
 const TABS: Array<{ id: UnifiedTabId; label: string }> = [
   { id: 'doc-anh', label: 'Đọc ảnh' },
   { id: 'tong-hop-lenh', label: 'Tổng hợp lệnh' },
   { id: 'bao-cao-tuan', label: 'Báo cáo tuần' },
+  { id: 'tin-tuc', label: 'Tin tức AI' },
 ];
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || '';
@@ -127,6 +129,9 @@ export default function UnifiedDashboard({ initialTab = 'doc-anh' }: { initialTa
           monthLabel={aggregatedMonthLabel}
           onOpenMonthly={() => selectTab('tong-hop-lenh')}
         />
+      </section>
+      <section id="panel-tin-tuc" className="unified-panel unified-panel-news" role="tabpanel" aria-labelledby="tab-tin-tuc" hidden={activeTab !== 'tin-tuc'}>
+        <NewsTool onOpenSettings={() => selectTab('doc-anh')} />
       </section>
     </div>
   );

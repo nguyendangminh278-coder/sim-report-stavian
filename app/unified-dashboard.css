@@ -67,7 +67,7 @@
 
 .unified-tablist {
   display: grid;
-  grid-template-columns: repeat(3, max-content);
+  grid-template-columns: repeat(4, max-content);
   gap: 4px;
   padding: 4px;
   border: 1px solid rgb(13 81 63 / 13%);
@@ -322,7 +322,7 @@
   .unified-tablist {
     grid-column: 1 / -1;
     grid-row: 2;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     width: 100%;
   }
 
