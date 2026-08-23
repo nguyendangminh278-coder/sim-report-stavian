@@ -5,7 +5,14 @@ import nextTs from 'eslint-config-next/typescript';
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  globalIgnores(['.next/**', 'out/**', 'build/**', 'next-env.d.ts']),
+  {
+    files: ['app/workspace.tsx', 'app/workspace-v2.tsx'],
+    rules: {
+      // These client workspaces intentionally hydrate saved credentials once on mount.
+      'react-hooks/set-state-in-effect': 'off',
+    },
+  },
+  globalIgnores(['.next/**', 'out/**', 'build/**', 'dist/**', 'next-env.d.ts']),
 ]);
 
 export default eslintConfig;
