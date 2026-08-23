@@ -1,7 +1,7 @@
 'use client';
 
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { getFirebaseFirestore } from './firebase-client';
+import { getFirebaseFirestore } from './firebase-client.ts';
 
 export type UserAiSettings = {
   geminiApiKey: string;

@@ -11,6 +11,7 @@ import {
 import WorkspaceV2 from './workspace-v2';
 import MonthlyReportTool from './tong-hop-lenh/monthly-tool';
 import WeeklyReportTool from './bao-cao-tuan/weekly-tool';
+import type { TradeRecord } from './lib/excel-report';
 import './unified-tab-fix.css';
 
 export type UnifiedTabId = 'doc-anh' | 'tong-hop-lenh' | 'bao-cao-tuan';
@@ -81,6 +82,8 @@ export default function UnifiedDashboard({ initialTab = 'doc-anh' }: { initialTa
     isFirebaseConfigured ? '' : 'Firebase chưa được cấu hình cho website này.',
   );
   const tabRefs = useRef<Array<HTMLAnchorElement | null>>([]);
+  const [aggregatedTrades, setAggregatedTrades] = useState<TradeRecord[]>([]);
+  const [aggregatedMonthLabel, setAggregatedMonthLabel] = useState('');
 
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -193,10 +196,22 @@ export default function UnifiedDashboard({ initialTab = 'doc-anh' }: { initialTa
         <WorkspaceV2 userId={user.uid} />
       </section>
       <section id="panel-tong-hop-lenh" className="unified-panel unified-panel-monthly" role="tabpanel" aria-labelledby="tab-tong-hop-lenh" hidden={activeTab !== 'tong-hop-lenh'}>
-        <MonthlyReportTool />
+        <MonthlyReportTool
+          userId={user.uid}
+          onAggregated={(trades, monthLabel) => {
+            setAggregatedTrades(trades);
+            setAggregatedMonthLabel(monthLabel);
+          }}
+        />
       </section>
       <section id="panel-bao-cao-tuan" className="unified-panel unified-panel-weekly" role="tabpanel" aria-labelledby="tab-bao-cao-tuan" hidden={activeTab !== 'bao-cao-tuan'}>
-        <WeeklyReportTool />
+        <WeeklyReportTool
+          key={aggregatedTrades.map((trade) => [trade.sourceSheet, trade.sourceRow, trade.pnlAfterFee].join(':')).join('|') || 'empty'}
+          userId={user.uid}
+          trades={aggregatedTrades}
+          monthLabel={aggregatedMonthLabel}
+          onOpenMonthly={() => selectTab('tong-hop-lenh')}
+        />
       </section>
     </div>
   );

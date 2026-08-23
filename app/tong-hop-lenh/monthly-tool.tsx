@@ -5,12 +5,11 @@ import { ChangeEvent, DragEvent, KeyboardEvent, useMemo, useRef, useState } from
 import {
   formatDateVN,
   formatNumber,
-  parseSimWorkbook,
   type TradeRecord,
 } from '../lib/excel-report';
+import { extractSettledTradesWithAi } from '../lib/ai-report';
 import './monthly-report.css';
 
-type SourceMode = 'summary-sheet' | 'daily-sheets';
 type CellKind = 'text' | 'date' | 'integer' | 'number' | 'money';
 
 type Column = {
@@ -128,12 +127,17 @@ function fileSlug(value: string) {
     .replace(/^-|-$/g, '');
 }
 
-export default function MonthlyReportPage() {
+export default function MonthlyReportPage({
+  userId,
+  onAggregated,
+}: {
+  userId: string;
+  onAggregated: (trades: TradeRecord[], monthLabel: string) => void;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [records, setRecords] = useState<TradeRecord[]>([]);
   const [fileName, setFileName] = useState('');
   const [monthLabel, setMonthLabel] = useState('');
-  const [sourceMode, setSourceMode] = useState<SourceMode | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [search, setSearch] = useState('');
   const [bankFilter, setBankFilter] = useState('');
@@ -144,6 +148,7 @@ export default function MonthlyReportPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [aiProgress, setAiProgress] = useState('');
 
   const banks = useMemo(
     () => [...new Set(records.map((record) => record.bank).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')),
@@ -196,32 +201,38 @@ export default function MonthlyReportPage() {
     }
 
     setIsLoading(true);
+    setAiProgress('Đang chuyển các sheet ngày thành dữ liệu cho Gemini…');
     try {
-      const parsed = await parseSimWorkbook(await file.arrayBuffer());
+      const parsed = await extractSettledTradesWithAi(
+        await file.arrayBuffer(),
+        userId,
+        (done, total) => setAiProgress('Gemini đang đọc nhóm ' + done + '/' + total + '…'),
+      );
       setRecords(parsed.trades);
       setFileName(file.name);
       setMonthLabel(parsed.monthLabel);
-      setSourceMode(parsed.sourceMode);
       setWarnings(parsed.warnings);
+      onAggregated(parsed.trades, parsed.monthLabel);
       setSearch('');
       setBankFilter('');
       setAccountFilter('');
       setTraderFilter('');
       if (!parsed.trades.length) {
-        setError('Không tìm thấy dòng hạch toán hợp lệ trong file này.');
+        setError('Gemini không tìm thấy dòng đã hạch toán hợp lệ trong các sheet ngày.');
       } else {
-        showNotice(`Đã đọc ${parsed.trades.length} lệnh hạch toán.`);
+        showNotice(`AI đã tổng hợp ${parsed.trades.length} lệnh đã hạch toán.`);
       }
     } catch (readError) {
       console.error(readError);
       setRecords([]);
       setFileName('');
       setMonthLabel('');
-      setSourceMode(null);
       setWarnings([]);
-      setError('Không thể đọc file Excel. Hãy kiểm tra cấu trúc sheet rồi thử lại.');
+      onAggregated([], '');
+      setError(readError instanceof Error ? readError.message : 'Không thể đọc file Excel bằng Gemini.');
     } finally {
       setIsLoading(false);
+      setAiProgress('');
       if (inputRef.current) inputRef.current.value = '';
     }
   };
@@ -392,8 +403,8 @@ export default function MonthlyReportPage() {
           <span className="monthly-eyebrow">SỔ LỆNH THÁNG</span>
           <h1>Tổng hợp toàn bộ lệnh hạch toán</h1>
           <p>
-            Tải workbook báo cáo lên để gom lệnh về đúng 22 cột, kiểm tra nhanh và xuất thành một sheet riêng.
-            File được xử lý ngay trên trình duyệt.
+            Tải workbook báo cáo lên. Gemini API của tài khoản bạn chỉ đọc các bảng hạch toán trong sheet ngày,
+            bỏ vị thế và OTE, rồi chuẩn hóa về đúng 22 cột.
           </p>
         </div>
         <div className="monthly-hero-note" aria-label="Quy tắc tính">
@@ -429,8 +440,8 @@ export default function MonthlyReportPage() {
             </svg>
           </div>
           <div>
-            <h2 id="upload-title">{isLoading ? 'Đang đọc workbook…' : 'Thả file Excel vào đây'}</h2>
-            <p>Chấp nhận .xlsx và .xlsm · Không tải dữ liệu lên máy chủ</p>
+            <h2 id="upload-title">{isLoading ? aiProgress || 'Gemini đang đọc workbook…' : 'Thả file Excel vào đây'}</h2>
+            <p>Chấp nhận .xlsx và .xlsm · Nội dung sheet ngày được gửi tới Gemini API của bạn</p>
           </div>
           <button type="button" onClick={() => inputRef.current?.click()} disabled={isLoading}>
             {records.length ? 'Chọn file khác' : 'Chọn file Excel'}
@@ -443,9 +454,7 @@ export default function MonthlyReportPage() {
             <span className="monthly-file-copy">
               <strong>{fileName}</strong>
               <small>
-                {sourceMode === 'summary-sheet'
-                  ? 'Đã đọc từ sheet tổng hợp có sẵn'
-                  : 'Đã tổng hợp từ các sheet báo cáo ngày'}
+                AI đã tổng hợp từ các bảng hạch toán trong sheet ngày
                 {monthLabel ? ` · ${safeMonthLabel(monthLabel)}` : ''}
               </small>
             </span>
@@ -482,8 +491,8 @@ export default function MonthlyReportPage() {
             </article>
             <article>
               <span>Nguồn dữ liệu</span>
-              <strong className="source-value">{sourceMode === 'summary-sheet' ? 'Sheet tổng hợp' : 'Sheet ngày'}</strong>
-              <small>đã chuẩn hóa</small>
+              <strong className="source-value">Gemini API</strong>
+              <small>chỉ lệnh đã hạch toán</small>
             </article>
           </section>
 
