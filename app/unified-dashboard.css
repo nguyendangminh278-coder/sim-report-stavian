@@ -106,23 +106,189 @@
   outline-offset: 2px;
 }
 
-.unified-privacy {
+.unified-account {
   display: inline-flex;
-  gap: 8px;
+  gap: 9px;
   align-items: center;
   justify-self: end;
-  color: #63736d;
-  font: 9px var(--font-mono), monospace;
-  letter-spacing: .045em;
+}
+
+.unified-account img,
+.unified-account-fallback {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgb(13 81 63 / 14%);
+  border-radius: 50%;
+  background: #dcece4;
+  object-fit: cover;
+  color: #0d513f;
+  font: 700 11px var(--font-mono), monospace;
+}
+
+.unified-account-copy strong,
+.unified-account-copy small {
+  display: block;
+  max-width: 155px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unified-account-copy strong {
+  color: #17372f;
+  font-size: 10px;
+}
+
+.unified-account-copy small {
+  margin-top: 2px;
+  color: #687872;
+  font: 8px var(--font-mono), monospace;
+}
+
+.unified-account button {
+  min-height: 32px;
+  padding: 0 10px;
+  color: #0d513f;
+  border: 1px solid rgb(13 81 63 / 20%);
+  border-radius: 9px;
+  background: rgb(255 255 255 / 78%);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.auth-shell {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 24px;
+  place-items: center;
+  background:
+    radial-gradient(circle at 18% 18%, rgb(111 189 151 / 28%), transparent 30%),
+    radial-gradient(circle at 85% 78%, rgb(13 81 63 / 16%), transparent 34%),
+    #f3f1e9;
+}
+
+.auth-card {
+  width: min(100%, 560px);
+  padding: clamp(30px, 6vw, 58px);
+  border: 1px solid rgb(13 81 63 / 14%);
+  border-radius: 24px;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 28px 90px rgb(20 53 44 / 16%);
+}
+
+.auth-brand {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.auth-brand > span {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  color: #fff;
+  border-radius: 13px;
+  background: #0d513f;
+  font: 700 14px var(--font-mono), monospace;
+}
+
+.auth-brand strong,
+.auth-brand small {
+  display: block;
+}
+
+.auth-brand strong {
+  color: #17372f;
+  letter-spacing: .06em;
   text-transform: uppercase;
 }
 
-.unified-privacy span {
-  width: 8px;
-  height: 8px;
+.auth-brand small {
+  margin-top: 3px;
+  color: #71817b;
+  font: 9px var(--font-mono), monospace;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.auth-eyebrow {
+  margin: 46px 0 10px;
+  color: #08765b;
+  font: 700 10px var(--font-mono), monospace;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.auth-card h1 {
+  margin: 0;
+  color: #17372f;
+  font-size: clamp(36px, 7vw, 58px);
+  font-weight: 500;
+  letter-spacing: -.055em;
+  line-height: .98;
+}
+
+.auth-lead,
+.auth-footnote {
+  color: #5e7069;
+  line-height: 1.7;
+}
+
+.auth-lead {
+  margin: 22px 0 28px;
+  font-size: 14px;
+}
+
+.google-signin {
+  display: flex;
+  width: 100%;
+  min-height: 52px;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  color: #17372f;
+  border: 1px solid #cfd8d3;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgb(20 53 44 / 7%);
+  font-weight: 700;
+}
+
+.google-signin span {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  color: #1769e0;
+  border: 1px solid #dde3e0;
   border-radius: 50%;
-  background: #14a878;
-  box-shadow: 0 0 0 4px rgb(20 168 120 / 12%);
+  font: 700 12px Arial, sans-serif;
+}
+
+.google-signin:disabled {
+  cursor: wait;
+  opacity: .62;
+}
+
+.auth-error {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  color: #8b2f2a;
+  border: 1px solid #e8b8b3;
+  border-radius: 10px;
+  background: #fae5e2;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.auth-footnote {
+  margin: 20px 0 0;
+  font-size: 10px;
 }
 
 .unified-panel {
@@ -149,7 +315,7 @@
     grid-column: 1;
   }
 
-  .unified-privacy {
+  .unified-account {
     grid-column: 2;
   }
 
@@ -174,14 +340,22 @@
     grid-template-columns: 1fr;
   }
 
-  .unified-brand,
-  .unified-privacy {
+  .unified-brand {
     display: none;
+  }
+
+  .unified-account {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .unified-account-copy {
+    flex: 1;
   }
 
   .unified-tablist {
     grid-column: 1;
-    grid-row: 1;
+    grid-row: 2;
     gap: 2px;
     padding: 3px;
     border-radius: 13px;

@@ -1,6 +1,17 @@
 'use client';
 
 import { type FirebaseApp, getApp, getApps, initializeApp } from 'firebase/app';
+import {
+  browserLocalPersistence,
+  getAuth,
+  GoogleAuthProvider,
+  setPersistence,
+  signInWithPopup,
+  signOut as firebaseSignOut,
+  type Auth,
+  type User,
+} from 'firebase/auth';
+import { getFirestore, type Firestore } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -30,4 +41,31 @@ export function getFirebaseApp(): FirebaseApp | null {
   if (getApps().length > 0) return getApp();
 
   return initializeApp(firebaseConfig);
+}
+
+export function getFirebaseAuth(): Auth | null {
+  const app = getFirebaseApp();
+  return app ? getAuth(app) : null;
+}
+
+export function getFirebaseFirestore(): Firestore | null {
+  const app = getFirebaseApp();
+  return app ? getFirestore(app) : null;
+}
+
+export async function signInWithGoogle(): Promise<User> {
+  const auth = getFirebaseAuth();
+  if (!auth) throw new Error('Firebase chưa được cấu hình.');
+
+  await setPersistence(auth, browserLocalPersistence);
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  const result = await signInWithPopup(auth, provider);
+  return result.user;
+}
+
+export async function signOutCurrentUser(): Promise<void> {
+  const auth = getFirebaseAuth();
+  if (!auth) return;
+  await firebaseSignOut(auth);
 }
