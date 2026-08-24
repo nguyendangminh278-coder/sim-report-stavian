@@ -44,6 +44,15 @@ function displayDate(value: string) {
   return `${day}/${month}/${year}`;
 }
 
+function displayPeriod(fromDate: string, toDate: string) {
+  const [fromYear, fromMonth, fromDay] = fromDate.split('-');
+  const [toYear, toMonth, toDay] = toDate.split('-');
+  if (fromDate === toDate) return `${toDay}/${toMonth}/${toYear}`;
+  if (fromYear === toYear && fromMonth === toMonth) return `${fromDay}–${toDay}/${toMonth}/${toYear}`;
+  if (fromYear === toYear) return `${fromDay}/${fromMonth}–${toDay}/${toMonth}/${toYear}`;
+  return `${fromDay}/${fromMonth}/${fromYear}–${toDay}/${toMonth}/${toYear}`;
+}
+
 function nextIsoDay(value: string) {
   const date = parseIsoDate(value);
   if (!date) return value;
@@ -68,7 +77,13 @@ export function buildDailyNewsPrompt(
 ): string {
   const fromLabel = displayDate(fromDate);
   const toLabel = displayDate(toDate);
-  const periodLabel = fromDate === toDate ? fromLabel : `${fromLabel} - ${toLabel}`;
+  const periodLabel = displayPeriod(fromDate, toDate);
+  const periodDays = Math.floor(
+    ((parseIsoDate(toDate)?.getTime() || 0) - (parseIsoDate(fromDate)?.getTime() || 0)) / 86_400_000,
+  ) + 1;
+  const newsSectionLabel = periodDays <= 2
+    ? 'Tin tức trong ngày hôm qua và sáng nay'
+    : 'Tin tức trong giai đoạn';
   const priceRule = fromDate === toDate
     ? `Đây là báo cáo cho đúng ngày ${fromLabel}. Chỉ dùng giá và tin trong ngày này.`
     : `Đây là báo cáo cho giai đoạn ${periodLabel}. Tin tức phải nằm trong giai đoạn này; phần giá lấy mốc cuối ngày ${toLabel}, hoặc official gần nhất nếu ngày cuối không có settlement.`;
@@ -76,7 +91,7 @@ export function buildDailyNewsPrompt(
   return `Bạn là Senior LME Base Metals Market Analyst cho desk giao dịch phái sinh hàng hóa tại Việt Nam.
 
 NHIỆM VỤ
-Tự dùng tìm kiếm web để tìm giá, tin tức và nguồn chính xác; sau đó viết báo cáo cho Đồng LME, Nhôm LME và Kẽm LME bằng tiếng Việt, ngắn gọn nhưng đủ ý, đi thẳng vào tác động giao dịch. Người đọc là trader, không giải thích khái niệm cơ bản.
+Tự dùng tìm kiếm web để tìm giá, tin tức và nguồn chính xác; sau đó viết báo cáo cho Đồng LME, Nhôm LME và Kẽm LME bằng tiếng Việt, ngắn gọn nhưng đủ chiều sâu, đi thẳng vào tác động giao dịch. Người đọc là trader, không giải thích khái niệm cơ bản.
 
 PHẠM VI THỜI GIAN BẮT BUỘC
 - ${priceRule}
@@ -86,92 +101,108 @@ PHẠM VI THỜI GIAN BẮT BUỘC
 - Không bịa giá, tồn kho, phần trăm thay đổi, hỗ trợ/kháng cự hoặc nguồn tin.
 
 NGUỒN ƯU TIÊN
-LME, Westmetall, Reuters, Fed, BLS, EIA, ISM, NBS China, Caixin/RatingDog và SMM. Mọi số liệu và nhận định quan trọng phải có nguồn. Nguồn đặt ở cuối từng kim loại dưới dạng URL đầy đủ. Không đưa tin không có nguồn; nếu nguồn không chắc ghi “chưa xác nhận”; nếu không có dữ liệu official ghi “chưa có dữ liệu official”.
+LME, Westmetall, Reuters, Fed, BLS, EIA, ISM, NBS China, Caixin/RatingDog và SMM. Mọi số liệu và nhận định quan trọng phải có nguồn. Không đưa tin không có nguồn; nếu nguồn không chắc ghi “chưa xác nhận”; nếu không có dữ liệu official ghi “chưa có dữ liệu official”.
 
 QUY TẮC PHÂN TÍCH CHUNG
-- Nêu giá mở cửa nếu có, cao/thấp nếu có, đóng cửa/settlement/3M, phần trăm thay đổi, tồn kho LME và kỹ thuật chính.
+- Mỗi phần “Giá như nào” phải ưu tiên đủ: Cash Settlement, giá 3M, phần trăm thay đổi so với phiên official trước, tồn kho LME và mức tăng/giảm tồn kho, chênh lệch Cash–3M và kết luận backwardation/contango.
+- Nếu có nguồn intraday đáng tin cậy, nêu thêm mở/cao/thấp/đóng của phiên điện tử gần nhất, volume, open interest và giá tại thời điểm báo cáo. Luôn ghi rõ giờ của số intraday và trạng thái đã/chưa có official settlement mới.
 - Nếu có gap, rút chân, phá hỗ trợ, test kháng cự, volume/open interest bất thường thì nêu rõ; chỉ ghi số khi có nguồn xác nhận.
 - Tin vĩ mô cần xét: Fed, USD, lãi suất, NFP, CPI, PCE, PMI, JOLTS, ISM, ADP, GDP và jobless claims.
 - Tin Trung Quốc cần xét: PMI, stimulus, bất động sản, hạ tầng, SHFE và spot.
 - Mỗi tin phải trả lời: tin là gì, vì sao ảnh hưởng, tác động hỗ trợ hay gây áp lực.
 - Nếu một kim loại không có tin riêng trọng yếu, ghi đúng câu: “Không có tin riêng trọng yếu; giá chủ yếu đi theo vĩ mô chung và kỹ thuật.”
+- Độ chi tiết phải tương đương một bản morning note chuyên nghiệp: mỗi kim loại khoảng 450–700 từ khi có đủ dữ liệu, không rút gọn thành vài bullet chung chung.
+- Số tiền/giá dùng cách viết nhất quán và luôn kèm USD/t hoặc tấn khi phù hợp; không đổi dấu thập phân nếu có nguy cơ làm sai số gốc.
+- Link nguồn viết dạng Markdown [Tên nguồn ngắn](URL chuẩn). Không thêm utm_source=chatgpt.com hoặc tham số theo dõi do AI tự tạo.
 - Không khuyến nghị mua hoặc bán trực tiếp.
 
 FORMAT BẮT BUỘC
 [TITLE]BÁO CÁO ĐỒNG LME NGÀY ${periodLabel}[/TITLE]
 
 <b>Giá như nào:</b>
-Viết thành đoạn văn theo quy tắc trên.
+Viết 2 đoạn: đoạn đầu là official/cash/3M/tồn kho/cấu trúc kỳ hạn; đoạn hai là phiên điện tử, intraday và tín hiệu volume/OI/kỹ thuật nếu có.
 
-<b>Tin tức trong kỳ:</b>
+<b>${newsSectionLabel}:</b>
 Viết 2–4 đoạn theo mức độ quan trọng. Ưu tiên vĩ mô, Trung Quốc, tồn kho LME/SHFE, mỏ, đình công, smelter, warehouse, warrant/cancelled warrant, premium và tariff liên quan Đồng.
 
 <b>Nhận xét:</b>
-Đánh giá driver chính, driver phụ, phản ứng giá có hợp lý không và tồn kho/kỹ thuật có xác nhận tin không.
+Đánh giá driver chính, driver phụ, phản ứng giá có hợp lý không, squeeze/backwardation thay đổi ra sao và tồn kho/kỹ thuật có xác nhận tin không.
 
-<b>Đánh giá tin tức:</b>
-Kết luận đúng một mức: Tích cực / Trung tính tích cực / Trung tính / Trung tính tiêu cực / Tiêu cực. Sau đó nêu hỗ trợ gần, hỗ trợ sâu, kháng cự gần, kháng cự mạnh theo dạng: nếu vượt X → kiểm định Y; nếu mất A → rủi ro về B. Không có số chắc chắn thì ghi chưa có dữ liệu kỹ thuật xác nhận.
+<b>Đánh giá tin tức:</b> <b>[một mức: Tích cực / Trung tính tích cực / Trung tính / Trung tính tiêu cực / Tiêu cực].</b>
+Nêu hỗ trợ gần, hỗ trợ sâu, kháng cự gần, kháng cự mạnh theo dạng: nếu vượt X → kiểm định Y; nếu mất A → rủi ro về B. Không có số chắc chắn thì ghi chưa có dữ liệu kỹ thuật xác nhận.
 
 Nguồn tin:
-1. https://...
+1. [Tên nguồn – nội dung](https://...)
 
 ---
 
 [TITLE]BÁO CÁO NHÔM LME NGÀY ${periodLabel}[/TITLE]
 
 <b>Giá như nào:</b>
-Viết thành đoạn văn; chú ý dầu/khí/điện, chi phí năng lượng, premium địa chính trị, Trung Đông/Trung Quốc, smelter, alumina/bauxite, tồn kho LME và billet nếu có.
+Viết 2 đoạn theo cấu trúc phần Đồng; chú ý thêm cash–3M, dầu/khí/điện, chi phí năng lượng, premium địa chính trị, Trung Đông/Trung Quốc, smelter, alumina/bauxite, tồn kho LME và billet nếu có.
 
-<b>Tin tức trong kỳ:</b>
+<b>${newsSectionLabel}:</b>
 Viết 2–4 đoạn theo thứ tự: vĩ mô chung, năng lượng/địa chính trị, ngành Nhôm, Trung Quốc/SHFE/spot. Giải thích hỗ trợ hay gây áp lực.
 
 <b>Nhận xét:</b>
 Đánh giá Nhôm mạnh/yếu hơn Đồng và Kẽm. Nếu giá giảm dù tồn kho giảm, giải thích bằng USD, premium chiến tranh, kỹ thuật hoặc demand.
 
-<b>Đánh giá tin tức:</b>
-Kết luận một mức và nêu kịch bản kỹ thuật như phần Đồng.
+<b>Đánh giá tin tức:</b> <b>[một mức].</b>
+Nêu hỗ trợ gần, hỗ trợ sâu, kháng cự gần, kháng cự mạnh và hai kịch bản vượt/mất mốc như phần Đồng.
 
 Nguồn tin:
-1. https://...
+1. [Tên nguồn – nội dung](https://...)
 
 ---
 
 [TITLE]BÁO CÁO KẼM LME NGÀY ${periodLabel}[/TITLE]
 
 <b>Giá như nào:</b>
-Viết thành đoạn văn; chú ý tồn kho LME/Trung Quốc, quặng kẽm, treatment charges, smelter output, thép mạ/xây dựng/sản xuất và spot Shanghai/Guangdong/Tianjin/Ningbo.
+Viết 2 đoạn theo cấu trúc phần Đồng; chú ý backwardation/contango, tồn kho LME/Trung Quốc, quặng kẽm, treatment charges, smelter output, thép mạ/xây dựng/sản xuất và spot Shanghai/Guangdong/Tianjin/Ningbo.
 
-<b>Tin tức trong kỳ:</b>
+<b>${newsSectionLabel}:</b>
 Viết 2–4 đoạn, phân biệt vĩ mô chung, tin riêng Kẽm, Trung Quốc/spot demand và tồn kho. Nếu Kẽm tăng nhưng spot demand yếu, ghi rõ mức tăng chưa được demand giao ngay xác nhận hoàn toàn.
 
 <b>Nhận xét:</b>
-Đánh giá Kẽm mạnh/yếu hơn Đồng và Nhôm, chỉ rõ driver chính.
+Đánh giá Kẽm mạnh/yếu hơn Đồng và Nhôm, chỉ rõ driver chính và rủi ro nếu cấu trúc kỳ hạn/tồn kho đảo chiều.
 
-<b>Đánh giá tin tức:</b>
-Kết luận một mức và nêu kịch bản kỹ thuật như phần Đồng.
+<b>Đánh giá tin tức:</b> <b>[một mức].</b>
+Nêu hỗ trợ gần, hỗ trợ sâu, kháng cự gần, kháng cự mạnh và hai kịch bản vượt/mất mốc như phần Đồng.
 
 Nguồn tin:
-1. https://...
+1. [Tên nguồn – nội dung](https://...)
 
 ---
+${includeEconomicCalendar ? `
+[TITLE]CHỈ SỐ KINH TẾ ẢNH HƯỞNG ĐẾN LME NGÀY ${periodLabel}[/TITLE]
+Nếu không có chỉ số lớn trong kỳ, ghi rõ ngày nào không có chỉ số kinh tế lớn trực tiếp ảnh hưởng LME, không tự bịa sự kiện để lấp chỗ trống.
 
-[TITLE]TỔNG KẾT NHANH NGÀY ${periodLabel}[/TITLE]
-Viết 3–5 câu: kim loại khỏe nhất, yếu nhất, driver chính toàn nhóm LME và rủi ro phiên tới. Không khuyến nghị mua/bán trực tiếp.
-
-${includeEconomicCalendar ? `[TITLE]CHỈ SỐ KINH TẾ ẢNH HƯỞNG ĐẾN LME NGÀY ${periodLabel}[/TITLE]
 Với từng chỉ số quan trọng trong kỳ, dùng format:
 [TITLE][TÊN CHỈ SỐ][/TITLE]
-<b>Chỉ số kinh tế:</b> Nêu thực tế, dự báo, kỳ trước; nếu chưa công bố ghi thời gian công bố theo giờ Việt Nam.
-<b>Đánh giá tác động LME:</b> Đánh giá qua USD/Fed, nhu cầu công nghiệp, năng lượng/lạm phát và Trung Quốc; nêu khác biệt với Đồng, Nhôm, Kẽm.
+
+<b>Chỉ số kinh tế:</b>
+Nêu số thực tế, dự báo, kỳ trước; nếu chưa công bố ghi thời gian công bố theo giờ Việt Nam.
+
+<b>Đánh giá tác động LME:</b>
+Đánh giá qua USD/Fed, nhu cầu công nghiệp, năng lượng/lạm phát và Trung Quốc; nêu khác biệt với Đồng, Nhôm, Kẽm.
+
 [TITLE]KẾT LUẬN NHANH CHO LME[/TITLE]
 Tổng hợp các chỉ số đang hỗ trợ hay gây áp lực.
+
 Nguồn link cho toàn bộ:
-1. https://...` : 'Không thêm phần lịch/chỉ số kinh tế riêng; chỉ nhắc số liệu vĩ mô khi nó trực tiếp giải thích biến động kim loại.'}
+1. [Tên nguồn](https://...)
+
+---` : 'Không thêm phần lịch/chỉ số kinh tế riêng; chỉ nhắc số liệu vĩ mô khi nó trực tiếp giải thích biến động kim loại.'}
+
+[TITLE]TỔNG KẾT NHANH NGÀY ${periodLabel}[/TITLE]
+Viết 3–5 câu thành một đoạn liền: kim loại khỏe nhất, yếu nhất, driver chính toàn nhóm LME, rủi ro phiên tới và sự kiện gần nhất cần theo dõi. Không khuyến nghị mua/bán trực tiếp.
 
 QUY TẮC VIẾT CUỐI
 - Giữ nguyên thẻ [TITLE]...[/TITLE] và nhãn <b>...</b>; không dùng markdown bold.
 - Không viết lan man, không lặp tin giữa ba kim loại nếu không cần.
 - Mỗi URL phải là nguồn đã thực sự tìm thấy, không tự tạo URL.
+- Thứ tự bắt buộc: Đồng → Nhôm → Kẽm → Chỉ số kinh tế (nếu được chọn) → Tổng kết nhanh.
+- Không bỏ các con số cấu trúc thị trường quan trọng chỉ để rút ngắn báo cáo. Nếu không tìm thấy thì ghi “chưa có dữ liệu official” thay vì suy đoán.
 - Trước khi trả lời, tự kiểm tra toàn bộ mốc ngày và loại bỏ mọi tin nằm ngoài kỳ.`;
 }
 
@@ -189,25 +220,44 @@ NHIỆM VỤ TỐC ĐỘ CAO
 - Ưu tiên tin xuất bản gần hiện tại nhất; chỉ xét 72 giờ gần nhất và nêu rõ thời gian Reuters đăng.
 - Tối đa 3 truy vấn tìm kiếm, dừng khi đã có các tin Reuters trọng yếu nhất. Không kéo dài vì tin thứ yếu.
 - Nguồn chính bắt buộc là URL thuộc reuters.com. Có thể dùng LME hoặc cơ quan chính thức chỉ để kiểm tra số liệu, nhưng không thay Reuters bằng blog hoặc trang tổng hợp.
+- Có thể dùng Reuters cũ hơn 72 giờ chỉ làm “bối cảnh trước đó” cho một tin mới và phải gắn nhãn rõ; không dùng tin cũ thay cho kết quả quét mới.
 - Không bịa headline, thời gian, giá, tồn kho hay URL. Nếu không tìm thấy Reuters mới phù hợp, ghi đúng: “Chưa tìm thấy tin Reuters mới trong 72 giờ qua có tác động trực tiếp và đủ nguồn xác nhận.”
-- Đánh giá tác động lên từng kim loại: Tích cực / Trung tính tích cực / Trung tính / Trung tính tiêu cực / Tiêu cực; giải thích driver trong 1–3 câu.
+- Tổng hợp 4–7 driver thực sự quan trọng. Mỗi driver phải có ít nhất một link Reuters đã tìm thấy; không lặp cùng một sự kiện thành nhiều mục.
+- Đánh giá Đồng, Nhôm, Kẽm theo xu hướng ngắn hạn và giải thích khác biệt giữa ba kim loại bằng dữ liệu nguồn cung, tồn kho, USD/Fed, Trung Quốc, năng lượng hoặc logistics.
 - Không khuyến nghị mua/bán trực tiếp.
 
-FORMAT
-[TITLE]CẬP NHẬT REUTERS QUAN TRỌNG CHO LME[/TITLE]
-<b>Thời điểm quét:</b> ${timestamp}
+FORMAT BẮT BUỘC — KHÔNG DÙNG THẺ [TITLE]
+Mở đầu bằng đúng một đoạn tổng quan theo kiểu:
+“Tính đến [giờ/ngày Việt Nam], tin Reuters đang tạo ra [đánh giá chung], nhưng [kim loại mạnh nhất], [kim loại biến động nhất], còn [kim loại yếu nhất].”
 
-Với mỗi tin, dùng:
-[TITLE][ĐỒNG/NHÔM/KẼM/TOÀN NHÓM] — [HEADLINE NGẮN][/TITLE]
-<b>Thời gian Reuters:</b> [thời gian]
-<b>Tin tức:</b> Tóm tắt đúng sự kiện.
-<b>Vì sao quan trọng:</b> Tác động trực tiếp đến LME.
-<b>Đánh giá tác động:</b> [mức đánh giá] — [giải thích ngắn].
-Nguồn:
-https://www.reuters.com/...
+Ngay sau đó xuất Markdown table đúng 3 cột:
+| Kim loại LME | Đánh giá ngắn hạn | Động lực chính |
+| --- | --- | --- |
+| Nhôm | ... | ... |
+| Đồng | ... | ... |
+| Kẽm | ... | ... |
+Sắp xếp ba dòng theo mức độ đáng chú ý tại thời điểm quét, không cố định thứ tự nếu dữ liệu cho kết luận khác.
 
-[TITLE]KẾT LUẬN NHANH[/TITLE]
-Nêu kim loại chịu tác động lớn nhất và driver cần theo dõi ngay. Giữ toàn bộ báo cáo ngắn, ưu tiên tốc độ và độ chính xác.`;
+Sau bảng, viết các mục đánh số:
+1. [Tiêu đề driver quan trọng nhất]
+
+[Một hoặc hai đoạn tóm tắt sự kiện, số liệu then chốt, mốc thời gian và vì sao thị trường quan tâm]. Cuối đoạn đặt link theo dạng: Reuters: [Tên bài ngắn](URL Reuters chuẩn)
+
+Tác động:
+
+Nhôm: [tác động và cơ chế truyền dẫn cụ thể].
+Đồng: [tác động và cơ chế truyền dẫn cụ thể].
+Kẽm: [tác động và cơ chế truyền dẫn cụ thể].
+
+Lặp cấu trúc trên cho 4–7 driver. Nếu một driver chỉ liên quan một hoặc hai kim loại, chỉ cần viết những kim loại thực sự bị ảnh hưởng.
+
+Kết thúc bằng tiêu đề văn bản “Kết luận giao dịch theo tin Reuters”, sau đó viết riêng ba dòng Nhôm, Đồng, Kẽm: xu hướng quan sát, lý do chính và rủi ro đảo chiều. Đoạn cuối nêu sự kiện có giờ Việt Nam gần nhất cần theo dõi.
+
+QUY TẮC TRÌNH BÀY
+- Không dùng [TITLE], không dùng bảng HTML, không dùng code block.
+- Link nguồn dùng Markdown [Tên bài](URL), ưu tiên canonical Reuters URL và không thêm utm_source=chatgpt.com.
+- Bản tin phải đủ chiều sâu như mẫu desk: khoảng 900–1.500 từ khi có đủ 4–7 tin, nhưng ưu tiên tốc độ và chỉ giữ tin có tác động giao dịch rõ.
+- Không bịa headline, URL, giờ công bố, giá, tồn kho, công suất hoặc tỷ lệ. Mọi số cụ thể phải truy nguyên được từ nguồn đã tìm thấy.`;
 }
 
 function timeRangeForDates(fromDate: string, toDate: string) {

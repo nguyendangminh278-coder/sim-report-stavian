@@ -29,41 +29,108 @@ function cleanUrl(value: string) {
 }
 
 function renderInlineMarkup(line: string): ReactNode[] {
-  return line.split(/(<b>.*?<\/b>|https?:\/\/[^\s<>]+)/g).filter(Boolean).map((part, index) => {
-    const bold = part.match(/^<b>(.*?)<\/b>$/);
-    if (bold) return <strong key={`${part}-${index}`}>{bold[1]}</strong>;
-    if (/^https?:\/\//.test(part)) {
-      const uri = cleanUrl(part);
-      const suffix = part.slice(uri.length);
-      return (
-        <span key={`${part}-${index}`}>
-          <a href={uri} target="_blank" rel="noreferrer">{uri}</a>{suffix}
-        </span>
-      );
-    }
-    return part;
-  });
+  return line
+    .split(/(<b>.*?<\/b>|\*\*.*?\*\*|\[[^\]]+\]\(https?:\/\/[^)]+\)|https?:\/\/[^\s<>]+)/g)
+    .filter(Boolean)
+    .map((part, index) => {
+      const htmlBold = part.match(/^<b>(.*?)<\/b>$/);
+      if (htmlBold) return <strong key={`${part}-${index}`}>{htmlBold[1]}</strong>;
+      const markdownBold = part.match(/^\*\*(.*?)\*\*$/);
+      if (markdownBold) return <strong key={`${part}-${index}`}>{markdownBold[1]}</strong>;
+      const markdownLink = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);
+      if (markdownLink) {
+        return <a key={`${part}-${index}`} href={markdownLink[2]} target="_blank" rel="noreferrer">{markdownLink[1]}</a>;
+      }
+      if (/^https?:\/\//.test(part)) {
+        const uri = cleanUrl(part);
+        const suffix = part.slice(uri.length);
+        return (
+          <span key={`${part}-${index}`}>
+            <a href={uri} target="_blank" rel="noreferrer">{uri}</a>{suffix}
+          </span>
+        );
+      }
+      return part;
+    });
+}
+
+function renderProseLine(line: string) {
+  const labelled = line.match(/^(Nhôm|Đồng|Kẽm|Reuters|Nguồn|Hỗ trợ gần|Hỗ trợ sâu|Kháng cự gần|Kháng cự mạnh):\s*(.*)$/i);
+  if (!labelled) return renderInlineMarkup(line);
+  return <><strong>{labelled[1]}:</strong>{labelled[2] ? <> {renderInlineMarkup(labelled[2])}</> : null}</>;
+}
+
+function markdownCells(line: string) {
+  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
+}
+
+function isTableDivider(line: string) {
+  const cells = markdownCells(line);
+  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
 }
 
 function ReportBody({ text }: { text: string }) {
-  return (
-    <div className="news-report-body">
-      {text.split(/\r?\n/).map((rawLine, index) => {
-        const line = rawLine.trim();
-        if (!line) return <div className="news-spacer" key={`space-${index}`} aria-hidden="true" />;
-        const title = line.match(/^\[TITLE\](.*?)\[\/TITLE\]$/i);
-        if (title) return <h2 key={`title-${index}`}>{title[1]}</h2>;
-        if (/^-{3,}$/.test(line)) return <hr key={`rule-${index}`} />;
-        if (/^Nguồn(?: tin| link cho toàn bộ)?:?$/i.test(line)) {
-          return <h3 key={`source-${index}`}>{line}</h3>;
-        }
-        if (/^(?:\*|-|•)\s+/.test(line)) {
-          return <p className="news-bullet" key={`bullet-${index}`}>{renderInlineMarkup(line.replace(/^(?:\*|-|•)\s+/, ''))}</p>;
-        }
-        return <p key={`line-${index}`}>{renderInlineMarkup(line)}</p>;
-      })}
-    </div>
-  );
+  const lines = text.split(/\r?\n/);
+  const blocks: ReactNode[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (!line) {
+      blocks.push(<div className="news-spacer" key={`space-${index}`} aria-hidden="true" />);
+      continue;
+    }
+
+    if (line.startsWith('|') && index + 1 < lines.length && isTableDivider(lines[index + 1].trim())) {
+      const headers = markdownCells(line);
+      const rows: string[][] = [];
+      index += 2;
+      while (index < lines.length && lines[index].trim().startsWith('|')) {
+        rows.push(markdownCells(lines[index].trim()));
+        index += 1;
+      }
+      index -= 1;
+      blocks.push(
+        <div className="news-table-scroll" key={`table-${index}`}>
+          <table className="news-summary-table">
+            <thead><tr>{headers.map((header, cellIndex) => <th key={`${header}-${cellIndex}`}>{renderInlineMarkup(header)}</th>)}</tr></thead>
+            <tbody>{rows.map((row, rowIndex) => (
+              <tr key={`row-${rowIndex}`}>{row.map((cell, cellIndex) => <td key={`${cell}-${cellIndex}`}>{renderInlineMarkup(cell)}</td>)}</tr>
+            ))}</tbody>
+          </table>
+        </div>,
+      );
+      continue;
+    }
+
+    const title = line.match(/^\[TITLE\](.*?)\[\/TITLE\]$/i);
+    if (title) {
+      blocks.push(<h2 key={`title-${index}`}>{title[1]}</h2>);
+      continue;
+    }
+    if (/^-{3,}$/.test(line)) {
+      blocks.push(<hr key={`rule-${index}`} />);
+      continue;
+    }
+    if (/^Nguồn(?: tin| link cho toàn bộ)?:?$/i.test(line)) {
+      blocks.push(<h3 key={`source-${index}`}>{line}</h3>);
+      continue;
+    }
+    if (/^\d+\.\s+/.test(line)) {
+      blocks.push(<h3 className="news-numbered-title" key={`numbered-${index}`}>{renderInlineMarkup(line)}</h3>);
+      continue;
+    }
+    if (/^(Tác động|Kết luận giao dịch theo tin Reuters):?$/i.test(line)) {
+      blocks.push(<h3 className="news-section-title" key={`section-${index}`}>{line.replace(/:$/, '')}</h3>);
+      continue;
+    }
+    if (/^(?:\*|-|•)\s+/.test(line)) {
+      blocks.push(<p className="news-bullet" key={`bullet-${index}`}>{renderInlineMarkup(line.replace(/^(?:\*|-|•)\s+/, ''))}</p>);
+      continue;
+    }
+    blocks.push(<p key={`line-${index}`}>{renderProseLine(line)}</p>);
+  }
+
+  return <div className="news-report-body">{blocks}</div>;
 }
 
 function ResultPanel({ result, onCopy }: { result: GroundedNewsResult; onCopy: () => void }) {
@@ -202,7 +269,7 @@ export default function NewsTool({ onOpenSettings }: { onOpenSettings: () => voi
           <div className="news-card-copy">
             <span>BÁO CÁO THEO KHOẢNG NGÀY</span>
             <h2>Đồng · Nhôm · Kẽm LME</h2>
-            <p>AI tìm giá, tin vĩ mô, tin ngành và nguồn chính thức trong đúng khoảng thời gian đã chọn.</p>
+            <p>Output đúng mẫu desk: giá official/intraday, tin theo driver, nhận xét, kịch bản kỹ thuật, nguồn và lịch kinh tế.</p>
           </div>
 
           <div className="news-date-grid">
@@ -236,7 +303,7 @@ export default function NewsTool({ onOpenSettings }: { onOpenSettings: () => voi
             <span>QUÉT NHANH REUTERS</span>
             <h2>Tin quan trọng mới nhất</h2>
             <p>
-              Một lần bấm để tìm Reuters gần hiện tại nhất trong 72 giờ qua, chỉ giữ tin ảnh hưởng trực tiếp đến giá LME.
+              Một lần bấm để xếp hạng Đồng–Nhôm–Kẽm, lập bảng tác động và phân tích các driver Reuters mới quan trọng nhất.
             </p>
           </div>
 
