@@ -1,0 +1,37 @@
+.provider-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin: 4px 0 18px;
+  padding: 4px;
+  border: 1px solid rgb(255 255 255 / 22%);
+  background: rgb(255 255 255 / 6%);
+}
+
+.provider-switch button {
+  min-height: 40px;
+  padding: 0 10px;
+  color: rgb(255 255 255 / 66%);
+  border: 0;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.provider-switch button.active {
+  color: #0d513f;
+  background: #dff2e7;
+  box-shadow: 0 5px 16px rgb(0 0 0 / 12%);
+}
+
+.provider-switch button:focus-visible {
+  outline: 3px solid rgb(142 229 186 / 38%);
+  outline-offset: 2px;
+}
+
+.provider-cost-note {
+  margin: 14px 0 0;
+  color: rgb(255 255 255 / 56%);
+  font-size: 9px;
+  line-height: 1.6;
+}

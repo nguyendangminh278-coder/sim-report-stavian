@@ -201,12 +201,12 @@ export default function MonthlyReportPage({
     }
 
     setIsLoading(true);
-    setAiProgress('Đang chuyển các sheet ngày thành dữ liệu cho Gemini…');
+    setAiProgress('Đang chuyển các sheet ngày thành dữ liệu cho AI…');
     try {
       const parsed = await extractSettledTradesWithAi(
         await file.arrayBuffer(),
 
-        (done, total) => setAiProgress('Gemini đang đọc nhóm ' + done + '/' + total + '…'),
+        (done, total) => setAiProgress('AI đang đọc nhóm ' + done + '/' + total + '…'),
       );
       setRecords(parsed.trades);
       setFileName(file.name);
@@ -218,7 +218,7 @@ export default function MonthlyReportPage({
       setAccountFilter('');
       setTraderFilter('');
       if (!parsed.trades.length) {
-        setError('Gemini không tìm thấy dòng đã hạch toán hợp lệ trong các sheet ngày.');
+        setError('AI không tìm thấy dòng đã hạch toán hợp lệ trong các sheet ngày.');
       } else {
         showNotice(`AI đã tổng hợp ${parsed.trades.length} lệnh đã hạch toán.`);
       }
@@ -229,7 +229,7 @@ export default function MonthlyReportPage({
       setMonthLabel('');
       setWarnings([]);
       onAggregated([], '');
-      setError(readError instanceof Error ? readError.message : 'Không thể đọc file Excel bằng Gemini.');
+      setError(readError instanceof Error ? readError.message : 'Không thể đọc file Excel bằng AI.');
     } finally {
       setIsLoading(false);
       setAiProgress('');
@@ -403,7 +403,7 @@ export default function MonthlyReportPage({
           <span className="monthly-eyebrow">SỔ LỆNH THÁNG</span>
           <h1>Tổng hợp toàn bộ lệnh hạch toán</h1>
           <p>
-            Tải workbook báo cáo lên. Gemini API của tài khoản bạn chỉ đọc các bảng hạch toán trong sheet ngày,
+            Tải workbook báo cáo lên. AI API đã chọn chỉ đọc các bảng hạch toán trong sheet ngày,
             bỏ vị thế và OTE, rồi chuẩn hóa về cấu trúc báo cáo thống nhất.
           </p>
         </div>
@@ -440,8 +440,8 @@ export default function MonthlyReportPage({
             </svg>
           </div>
           <div>
-            <h2 id="upload-title">{isLoading ? aiProgress || 'Gemini đang đọc workbook…' : 'Thả file Excel vào đây'}</h2>
-            <p>Chấp nhận .xlsx và .xlsm · Nội dung sheet ngày được gửi tới Gemini API của bạn</p>
+            <h2 id="upload-title">{isLoading ? aiProgress || 'AI đang đọc workbook…' : 'Thả file Excel vào đây'}</h2>
+            <p>Chấp nhận .xlsx và .xlsm · Nội dung sheet ngày được gửi tới AI API bạn đã chọn</p>
           </div>
           <button type="button" onClick={() => inputRef.current?.click()} disabled={isLoading}>
             {records.length ? 'Chọn file khác' : 'Chọn file Excel'}
@@ -491,7 +491,7 @@ export default function MonthlyReportPage({
             </article>
             <article>
               <span>Nguồn dữ liệu</span>
-              <strong className="source-value">Gemini API</strong>
+              <strong className="source-value">AI đã chọn</strong>
               <small>chỉ lệnh đã hạch toán</small>
             </article>
           </section>

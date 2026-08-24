@@ -24,7 +24,15 @@ import {
   selectAiData,
   weightedPositionSummary,
 } from './lib/report-v2';
-import { DEFAULT_GEMINI_MODEL, loadLocalAiSettings, saveLocalAiSettings } from './lib/local-ai-settings';
+import {
+  DEFAULT_GEMINI_MODEL,
+  DEFAULT_OPENAI_MODEL,
+  loadLocalAiSettings,
+  saveLocalAiSettings,
+  type AiProvider,
+} from './lib/local-ai-settings';
+import { callConfiguredAiJson } from './lib/ai-provider';
+import './ai-provider.css';
 
 type QueueStatus = 'waiting' | 'reading' | 'done' | 'error';
 
@@ -270,9 +278,17 @@ export default function WorkspaceV2() {
   const [fee, setFee] = useState<number>(firstAccount.fee);
   const [reportDate, setReportDate] = useState(todayVi);
   const [operatorName, setOperatorName] = useState('');
-  const [apiKey, setApiKey] = useState('');
+  const [provider, setProvider] = useState<AiProvider>('gemini');
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [openAiApiKey, setOpenAiApiKey] = useState('');
+  const [geminiModel, setGeminiModel] = useState(DEFAULT_GEMINI_MODEL);
+  const [openAiModel, setOpenAiModel] = useState(DEFAULT_OPENAI_MODEL);
   const [showKey, setShowKey] = useState(false);
-  const [model, setModel] = useState(DEFAULT_GEMINI_MODEL);
+  const apiKey = provider === 'openai' ? openAiApiKey : geminiApiKey;
+  const model = provider === 'openai' ? openAiModel : geminiModel;
+  const providerLabel = provider === 'openai' ? 'OpenAI' : 'Gemini';
+  const setApiKey = provider === 'openai' ? setOpenAiApiKey : setGeminiApiKey;
+  const setModel = provider === 'openai' ? setOpenAiModel : setGeminiModel;
 
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [reports, setReports] = useState<AccountReport[]>([]);
@@ -282,11 +298,14 @@ export default function WorkspaceV2() {
   useEffect(() => {
     const settings = loadLocalAiSettings();
     const timer = window.setTimeout(() => {
-      if (settings.geminiApiKey) {
-        setApiKey(settings.geminiApiKey);
-        setToast('Đã tải API Key từ trình duyệt này');
+      setProvider(settings.provider);
+      setGeminiApiKey(settings.geminiApiKey);
+      setOpenAiApiKey(settings.openAiApiKey);
+      setGeminiModel(settings.geminiModel || DEFAULT_GEMINI_MODEL);
+      setOpenAiModel(settings.openAiModel || DEFAULT_OPENAI_MODEL);
+      if (settings.geminiApiKey || settings.openAiApiKey) {
+        setToast('Đã tải cấu hình AI từ trình duyệt này');
       }
-      setModel(settings.model || DEFAULT_GEMINI_MODEL);
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -314,66 +333,46 @@ export default function WorkspaceV2() {
     const nextKey = apiKey.trim();
     const nextModel = model.trim();
     if (!nextKey) {
-      setToast('Nhập Gemini API Key trước khi lưu');
+      setToast(`Nhập ${providerLabel} API Key trước khi lưu`);
       return;
     }
     if (!nextModel) {
-      setToast('Nhập model Gemini trước khi lưu');
+      setToast(`Nhập model ${providerLabel} trước khi lưu`);
       return;
     }
 
     try {
-      saveLocalAiSettings({ geminiApiKey: nextKey, model: nextModel });
-      setToast('Đã lưu API Key trên trình duyệt này');
+      saveLocalAiSettings({
+        provider,
+        geminiApiKey,
+        openAiApiKey,
+        geminiModel,
+        openAiModel,
+      });
+      setToast(`Đã lưu cấu hình ${providerLabel} trên trình duyệt này`);
     } catch {
       setToast('Trình duyệt không cho phép lưu API Key cục bộ.');
     }
   }
-  async function callGemini(file: File, expectedType: ImageType): Promise<AiResult> {
-    const key = apiKey.trim();
-    const modelId = model.trim();
-    if (!key) throw new Error('Chưa có Gemini API Key.');
-    if (!modelId) throw new Error('Chưa chọn model Gemini.');
 
+  async function callConfiguredVision(file: File, expectedType: ImageType): Promise<AiResult> {
+    if (!apiKey.trim()) throw new Error(`Chưa có ${providerLabel} API Key.`);
+    if (!model.trim()) throw new Error(`Chưa chọn model ${providerLabel}.`);
     const data = await fileToBase64(file);
     const prompt = buildExtractionPrompt(accountName, accountCode, fee, file.name, expectedType);
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:generateContent?key=${encodeURIComponent(key)}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ inlineData: { mimeType: file.type || 'image/jpeg', data } }, { text: prompt }] }],
-          generationConfig: {
-            temperature: 0,
-            maxOutputTokens: 8192,
-            responseMimeType: 'application/json',
-            responseSchema: strictSchema(expectedType),
-          },
-        }),
-      },
-    );
-
-    const payload = (await response.json()) as {
-      error?: { code?: number; message?: string };
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;
-    };
-    if (!response.ok || payload.error) {
-      const code = payload.error?.code || response.status;
-      const message = payload.error?.message || 'Gemini không xử lý được ảnh.';
-      if (code === 429) throw new Error('Đã hết quota miễn phí tạm thời. Thử lại sau.');
-      if (code === 401 || code === 403) throw new Error('API Key không hợp lệ hoặc chưa được cấp quyền.');
-      if (code === 404) throw new Error(`Model “${modelId}” không khả dụng. Hãy đổi model trong Cấu hình AI.`);
-      throw new Error(`Gemini lỗi ${code}: ${message}`);
-    }
-
-    const raw = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('').trim() || '';
-    if (!raw) throw new Error('Gemini trả về kết quả rỗng.');
-    const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim();
     try {
-      return JSON.parse(clean) as AiResult;
-    } catch {
-      throw new Error('Kết quả AI không đúng JSON. Hãy thử crop ảnh sát bảng hơn.');
+      return await callConfiguredAiJson<AiResult>({
+        prompt,
+        schema: strictSchema(expectedType),
+        schemaName: `sim_report_${expectedType}`,
+        maxOutputTokens: 8192,
+        images: [{ mimeType: file.type || 'image/jpeg', data }],
+      });
+    } catch (error) {
+      if (error instanceof Error && /JSON/i.test(error.message)) {
+        throw new Error('Kết quả AI không đúng JSON. Hãy thử crop ảnh sát bảng hơn.');
+      }
+      throw error;
     }
   }
 
@@ -442,7 +441,7 @@ export default function WorkspaceV2() {
   async function processItems(items: QueueItem[]) {
     if (!items.length || busy) return;
     if (!apiKey.trim()) {
-      setToast('Nhập Gemini API Key trước khi đọc ảnh');
+      setToast(`Nhập ${providerLabel} API Key trước khi đọc ảnh`);
       return;
     }
     if (items.some((item) => item.expectedType === 'auto')) {
@@ -455,7 +454,7 @@ export default function WorkspaceV2() {
         ? { ...entry, status: 'reading', message: `Đang đọc ${imageTypeLabel(item.expectedType)}…` }
         : entry));
       try {
-        const result = await callGemini(item.file, item.expectedType);
+        const result = await callConfiguredVision(item.file, item.expectedType);
         const merged = mergeAiResult(result, item.file.name, item.expectedType);
         const message = merged.noTrades
           ? 'Không có phát sinh hạch toán.'
@@ -671,16 +670,21 @@ export default function WorkspaceV2() {
         </div>
 
         <aside className="settings-panel">
-          <div className="section-heading compact"><span className="section-number">AI</span><div><p>Cấu hình miễn phí</p><h2>Gemini Vision</h2></div></div>
-          <label className="field"><span>Gemini API Key</span><div className="key-field"><input type={showKey ? 'text' : 'password'} value={apiKey} placeholder="AIza…" autoComplete="off" spellCheck={false} onChange={(event) => setApiKey(event.target.value)} /><button type="button" onClick={() => setShowKey((value) => !value)}>{showKey ? 'Ẩn' : 'Hiện'}</button></div></label>
+          <div className="section-heading compact"><span className="section-number">AI</span><div><p>Chọn nhà cung cấp</p><h2>{provider === 'openai' ? 'GPT-4o mini' : 'Gemini Vision'}</h2></div></div>
+          <div className="provider-switch" role="group" aria-label="Nhà cung cấp AI">
+            <button type="button" className={provider === 'gemini' ? 'active' : ''} aria-pressed={provider === 'gemini'} onClick={() => setProvider('gemini')}>Gemini</button>
+            <button type="button" className={provider === 'openai' ? 'active' : ''} aria-pressed={provider === 'openai'} onClick={() => setProvider('openai')}>GPT-4o mini</button>
+          </div>
+          <label className="field"><span>{providerLabel} API Key</span><div className="key-field"><input type={showKey ? 'text' : 'password'} value={apiKey} placeholder={provider === 'openai' ? 'sk-…' : 'AIza…'} autoComplete="off" spellCheck={false} onChange={(event) => setApiKey(event.target.value)} /><button type="button" onClick={() => setShowKey((value) => !value)}>{showKey ? 'Ẩn' : 'Hiện'}</button></div></label>
           <label className="field"><span>Model</span><input value={model} onChange={(event) => setModel(event.target.value)} /></label>
           <div className="cloud-save-note">
             <span aria-hidden="true" />
-            <div><strong>{apiKey.trim() ? 'API Key đã nhập' : 'Lưu cục bộ trên thiết bị'}</strong><p>Không cần đăng nhập. Khóa chỉ được lưu trên trình duyệt này.</p></div>
+            <div><strong>{apiKey.trim() ? `${providerLabel} API Key đã nhập` : 'Lưu cục bộ trên thiết bị'}</strong><p>Không cần đăng nhập. Mỗi nhà cung cấp có khóa riêng.</p></div>
           </div>
           <button className="button button-outline" disabled={!apiKey.trim()} onClick={persistSettings}>Lưu trên trình duyệt</button>
-          <a className="text-link" href="https://aistudio.google.com/api-keys" target="_blank" rel="noreferrer">Tạo API Key miễn phí ↗</a>
-          <div className="privacy-note"><strong>Ranh giới dữ liệu</strong><p>API Key được lưu trong localStorage của trình duyệt này và chỉ được gửi trực tiếp tới Gemini khi xử lý dữ liệu.</p></div>
+          <a className="text-link" href={provider === 'openai' ? 'https://platform.openai.com/api-keys' : 'https://aistudio.google.com/api-keys'} target="_blank" rel="noreferrer">Tạo {providerLabel} API Key ↗</a>
+          {provider === 'openai' ? <p className="provider-cost-note">GPT-4o mini là API trả phí theo mức sử dụng; gói ChatGPT không bao gồm chi phí API.</p> : null}
+          <div className="privacy-note"><strong>Ranh giới dữ liệu</strong><p>API Key được lưu trong localStorage của trình duyệt này và chỉ gửi trực tiếp tới {providerLabel} khi xử lý dữ liệu.</p></div>
           <div className="rule-note"><strong>Công thức đang áp dụng</strong><code>Tấn = lot × 25</code><code>Tổng phí = tấn × phí × 2</code><code>Long: (đóng − mở) × tấn</code><code>Short: (mở − đóng) × tấn</code><p>Yêu cầu mới đã thay thế công thức một lượt trước đây.</p></div>
         </aside>
       </section>

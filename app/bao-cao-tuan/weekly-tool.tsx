@@ -180,7 +180,7 @@ export default function WeeklyReportPage({
     } catch (cause) {
       setReviewedTrades(null);
       setNotes([]);
-      setError(cause instanceof Error ? cause.message : 'Không thể tạo báo cáo tuần bằng Gemini.');
+      setError(cause instanceof Error ? cause.message : 'Không thể tạo báo cáo tuần bằng AI.');
     } finally {
       setIsLoading(false);
     }
@@ -311,7 +311,7 @@ export default function WeeklyReportPage({
           <span className="wr-eyebrow">BƯỚC 2 · BÁO CÁO QUẢN TRỊ</span>
           <h1>Báo cáo tuần từ lệnh đã hạch toán</h1>
           <p>
-            Báo cáo này chỉ dùng dữ liệu vừa tạo ở phần Tổng hợp lệnh. Gemini chuẩn hóa tên người,
+            Báo cáo này chỉ dùng dữ liệu vừa tạo ở phần Tổng hợp lệnh. AI đã chọn chuẩn hóa tên người,
             tài khoản và mặt hàng; website đối soát lại P&amp;L, lot và winrate bằng công thức.
           </p>
         </div>
@@ -329,13 +329,13 @@ export default function WeeklyReportPage({
             </strong>
             <span>
               {trades.length
-                ? `${monthLabel || 'Chưa xác định tháng'} · sẵn sàng gửi Gemini kiểm tra trước khi cộng tuần`
+                ? `${monthLabel || 'Chưa xác định tháng'} · sẵn sàng gửi AI kiểm tra trước khi cộng tuần`
                 : 'Hãy hoàn tất bước Tổng hợp lệnh trước; trang này không nhận Excel riêng.'}
             </span>
           </div>
           {trades.length ? (
             <button type="button" onClick={() => void generateReport()} disabled={isLoading}>
-              {isLoading ? 'Gemini đang chuẩn hóa…' : hasReport ? 'Tạo lại báo cáo AI' : 'Tạo báo cáo tuần bằng AI'}
+              {isLoading ? 'AI đang chuẩn hóa…' : hasReport ? 'Tạo lại báo cáo AI' : 'Tạo báo cáo tuần bằng AI'}
             </button>
           ) : (
             <button type="button" onClick={onOpenMonthly}>Mở Tổng hợp lệnh</button>
@@ -344,7 +344,7 @@ export default function WeeklyReportPage({
         {error ? <div className="wr-alert wr-alert-error" role="alert">{error}</div> : null}
         {notes.length ? (
           <details className="wr-alert wr-alert-warning">
-            <summary>{notes.length} lưu ý từ Gemini</summary>
+            <summary>{notes.length} lưu ý từ AI</summary>
             <ul>{notes.map((note, index) => <li key={`${note}-${index}`}>{note}</li>)}</ul>
           </details>
         ) : null}

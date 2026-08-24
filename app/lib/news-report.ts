@@ -1,6 +1,7 @@
 'use client';
 
 import { loadLocalAiSettings } from './local-ai-settings.ts';
+import { callConfiguredOpenAiSearch } from './ai-provider.ts';
 
 export type GroundedSource = {
   title: string;
@@ -75,7 +76,7 @@ export function buildDailyNewsPrompt(
   return `Bạn là Senior LME Base Metals Market Analyst cho desk giao dịch phái sinh hàng hóa tại Việt Nam.
 
 NHIỆM VỤ
-Tự dùng Google Search để tìm giá, tin tức và nguồn chính xác; sau đó viết báo cáo cho Đồng LME, Nhôm LME và Kẽm LME bằng tiếng Việt, ngắn gọn nhưng đủ ý, đi thẳng vào tác động giao dịch. Người đọc là trader, không giải thích khái niệm cơ bản.
+Tự dùng tìm kiếm web để tìm giá, tin tức và nguồn chính xác; sau đó viết báo cáo cho Đồng LME, Nhôm LME và Kẽm LME bằng tiếng Việt, ngắn gọn nhưng đủ ý, đi thẳng vào tác động giao dịch. Người đọc là trader, không giải thích khái niệm cơ bản.
 
 PHẠM VI THỜI GIAN BẮT BUỘC
 - ${priceRule}
@@ -184,7 +185,7 @@ export function buildLatestReutersPrompt(now: Date): string {
   return `Bạn là Senior LME Base Metals Market Analyst. Thời điểm quét: ${timestamp} (giờ Việt Nam).
 
 NHIỆM VỤ TỐC ĐỘ CAO
-- Dùng Google Search ngay bây giờ để tìm các tin Reuters mới nhất có ảnh hưởng thực sự đến Đồng LME, Nhôm LME hoặc Kẽm LME.
+- Dùng tìm kiếm web ngay bây giờ để tìm các tin Reuters mới nhất có ảnh hưởng thực sự đến Đồng LME, Nhôm LME hoặc Kẽm LME.
 - Ưu tiên tin xuất bản gần hiện tại nhất; chỉ xét 72 giờ gần nhất và nêu rõ thời gian Reuters đăng.
 - Tối đa 3 truy vấn tìm kiếm, dừng khi đã có các tin Reuters trọng yếu nhất. Không kéo dài vì tin thứ yếu.
 - Nguồn chính bắt buộc là URL thuộc reuters.com. Có thể dùng LME hoặc cơ quan chính thức chỉ để kiểm tra số liệu, nhưng không thay Reuters bằng blog hoặc trang tổng hợp.
@@ -341,6 +342,20 @@ async function callGroundedGemini(
   };
 }
 
+async function callGroundedAi(
+  prompt: string,
+  timeRange: { startTime: string; endTime: string },
+  maxOutputTokens: number,
+  timeoutMs: number,
+  maxToolCalls: number,
+) {
+  const settings = loadLocalAiSettings();
+  if (settings.provider === 'openai') {
+    return callConfiguredOpenAiSearch(prompt, maxOutputTokens, timeoutMs, maxToolCalls);
+  }
+  return callGroundedGemini(prompt, timeRange, maxOutputTokens, timeoutMs);
+}
+
 export async function generateDailyNewsReport(
   fromDate: string,
   toDate: string,
@@ -348,25 +363,27 @@ export async function generateDailyNewsReport(
 ) {
   const validationError = validateNewsDateRange(fromDate, toDate);
   if (validationError) throw new Error(validationError);
-  return callGroundedGemini(
+  return callGroundedAi(
     buildDailyNewsPrompt(fromDate, toDate, includeEconomicCalendar),
     timeRangeForDates(fromDate, toDate),
     24_576,
     120_000,
+    10,
   );
 }
 
 export async function generateLatestReutersUpdate(now = new Date()) {
   const start = new Date(now.getTime() - 72 * 60 * 60 * 1000);
   const end = new Date(now.getTime() + 5 * 60 * 1000);
-  const result = await callGroundedGemini(
+  const result = await callGroundedAi(
     buildLatestReutersPrompt(now),
     { startTime: start.toISOString(), endTime: end.toISOString() },
     8_192,
     60_000,
+    3,
   );
   const reutersSources = result.sources.filter((source) => /reuters/i.test(`${source.title} ${source.uri}`));
   if (reutersSources.length) return { ...result, sources: reutersSources };
   if (/chưa tìm thấy tin reuters mới/i.test(result.text)) return result;
-  throw new Error('Gemini chưa trả được nguồn Reuters xác nhận. Hãy bấm cập nhật lại sau ít phút.');
+  throw new Error('AI chưa trả được nguồn Reuters xác nhận. Hãy bấm cập nhật lại sau ít phút.');
 }

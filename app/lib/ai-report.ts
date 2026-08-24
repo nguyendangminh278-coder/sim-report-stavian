@@ -1,7 +1,7 @@
 'use client';
 
 import { parseSimWorkbook, type TradeRecord } from './excel-report.ts';
-import { loadLocalAiSettings } from './local-ai-settings.ts';
+import { callConfiguredAiJson } from './ai-provider.ts';
 
 type GeminiSchema = Record<string, unknown>;
 
@@ -329,48 +329,12 @@ async function callGeminiJson<T>(
   schema: GeminiSchema,
   maxOutputTokens: number,
 ): Promise<T> {
-  const settings = loadLocalAiSettings();
-  const apiKey = settings.geminiApiKey.trim();
-  const model = settings.model.trim();
-  if (!apiKey || !model) {
-    throw new Error('Chưa có Gemini API Key. Vào phần Đọc ảnh → Cấu hình AI để nhập và lưu khóa trên trình duyệt này.');
-  }
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens,
-          responseMimeType: 'application/json',
-          responseSchema: schema,
-        },
-      }),
-    },
-  );
-  const payload = await response.json() as {
-    error?: { code?: number; message?: string };
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  if (!response.ok || payload.error) {
-    const code = payload.error?.code || response.status;
-    const message = payload.error?.message || 'Gemini không xử lý được dữ liệu.';
-    if (code === 429) throw new Error('Gemini đã hết quota tạm thời. Hãy đợi rồi thử lại.');
-    if (code === 401 || code === 403) throw new Error('Gemini API Key không hợp lệ hoặc chưa được cấp quyền.');
-    if (code === 404) throw new Error(`Model “${model}” không khả dụng. Hãy đổi model trong Cấu hình AI.`);
-    throw new Error(`Gemini lỗi ${code}: ${message}`);
-  }
-  const raw = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('').trim() || '';
-  if (!raw) throw new Error('Gemini trả về kết quả rỗng.');
-  const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim();
-  try {
-    return JSON.parse(clean) as T;
-  } catch {
-    throw new Error('Gemini trả về JSON không hợp lệ. Hãy thử lại.');
-  }
+  return callConfiguredAiJson<T>({
+    prompt,
+    schema,
+    schemaName: 'sim_report_excel',
+    maxOutputTokens,
+  });
 }
 
 function columnName(number: number) {

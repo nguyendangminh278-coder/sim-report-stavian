@@ -96,7 +96,7 @@ function ResultPanel({ result, onCopy }: { result: GroundedNewsResult; onCopy: (
         <div className="news-sources">
           <div>
             <span>ĐỐI CHIẾU NGUỒN</span>
-            <h2>Nguồn Gemini đã sử dụng</h2>
+            <h2>Nguồn AI đã sử dụng</h2>
           </div>
           <ol>
             {result.sources.map((source) => (
@@ -186,7 +186,7 @@ export default function NewsTool({ onOpenSettings }: { onOpenSettings: () => voi
           <span className="news-eyebrow">LME INTELLIGENCE · GOOGLE SEARCH GROUNDING</span>
           <h1>Tin tức AI cho desk kim loại</h1>
           <p>
-            Chọn khoảng ngày, Gemini tự tìm nguồn, kiểm tra mốc thời gian và đánh giá tác động lên Đồng, Nhôm, Kẽm.
+            Chọn khoảng ngày, AI đã chọn tự tìm nguồn, kiểm tra mốc thời gian và đánh giá tác động lên Đồng, Nhôm, Kẽm.
             Không có nguồn grounding thì website không xuất báo cáo.
           </p>
         </div>
@@ -202,7 +202,7 @@ export default function NewsTool({ onOpenSettings }: { onOpenSettings: () => voi
           <div className="news-card-copy">
             <span>BÁO CÁO THEO KHOẢNG NGÀY</span>
             <h2>Đồng · Nhôm · Kẽm LME</h2>
-            <p>Gemini tìm giá, tin vĩ mô, tin ngành và nguồn chính thức trong đúng khoảng thời gian đã chọn.</p>
+            <p>AI tìm giá, tin vĩ mô, tin ngành và nguồn chính thức trong đúng khoảng thời gian đã chọn.</p>
           </div>
 
           <div className="news-date-grid">
@@ -226,7 +226,7 @@ export default function NewsTool({ onOpenSettings }: { onOpenSettings: () => voi
           </label>
 
           <button className="news-run-button" type="button" onClick={() => void runDailyReport()} disabled={isLoading}>
-            {activeRequest === 'daily' ? 'Gemini đang tìm và đánh giá…' : 'Tìm kiếm & tạo báo cáo'}
+            {activeRequest === 'daily' ? 'AI đang tìm và đánh giá…' : 'Tìm kiếm & tạo báo cáo'}
           </button>
         </article>
 
@@ -255,7 +255,7 @@ export default function NewsTool({ onOpenSettings }: { onOpenSettings: () => voi
 
       <section className="news-api-strip">
         <span>AI</span>
-        <p>Chức năng này dùng Gemini API Key đã lưu ở phần Đọc ảnh.</p>
+        <p>Chức năng này dùng API Key của nhà cung cấp đã chọn được lưu ở phần Đọc ảnh.</p>
         <button type="button" onClick={onOpenSettings}>Mở cấu hình API</button>
       </section>
 
@@ -265,7 +265,7 @@ export default function NewsTool({ onOpenSettings }: { onOpenSettings: () => voi
           <span aria-hidden="true" />
           <div>
             <strong>{activeRequest === 'latest' ? 'Đang tìm Reuters mới nhất' : 'Đang đối chiếu giá, tin tức và nguồn'}</strong>
-            <small>Gemini đang sử dụng Google Search grounding. Vui lòng giữ trang mở.</small>
+            <small>AI đang sử dụng tìm kiếm web. Vui lòng giữ trang mở.</small>
           </div>
         </div>
       )}
