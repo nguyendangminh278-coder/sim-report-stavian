@@ -109,3 +109,33 @@ test('giữ OTE, KPI, NOTE và dữ liệu tháng từ sheet báo cáo tuần', 
   assert.equal(reference.inMonthlySummary, true);
   assert.equal(reference.periodValues?.['17.08 - 21.08'], -220.5);
 });
+
+
+test('bỏ sheet tổng hợp cũ khi sheet ngày có dữ liệu mới hơn', async () => {
+  const workbook = new ExcelJS.Workbook();
+  const summary = workbook.addWorksheet('Tổng hợp lệnh tháng 8');
+  summary.addRow(HEADERS);
+  summary.addRow([
+    new Date(2026, 7, 14), 'BIDV', 'BIDV', 'Ngày 14.08', 24, 1, 'Đức',
+    new Date(2026, 7, 13), new Date(2026, 7, 14), new Date(2026, 10, 13),
+    'LALZ', 'Nhôm', 'Long', 3200, 3201, 1, 25, 0.66, 33, '', 25, -8,
+  ]);
+  const daily = workbook.addWorksheet('Ngày 21.08');
+  daily.addRow(['HẠCH TOÁN LỢI NHUẬN GIAO DỊCH - BIDV']);
+  daily.addRow([
+    'STT', 'Người thực hiện', 'Ngày mở lệnh', 'Ngày tất toán', 'Ngày đáo hạn',
+    'Mã hợp đồng', 'Mặt hàng', 'Vị thế', 'Giá mở', 'Giá đóng',
+    'Khối lượng quy đổi (lot)', 'Khối lượng quy đổi (tấn)', 'Phí giao dịch (usd/mt)',
+    'Tổng phí/lệnh', 'Giá carry (usd/mt)', 'Lợi nhuận chưa phí giao dịch',
+    'Lợi nhuận sau phí giao dịch',
+  ]);
+  daily.addRow([
+    1, 'Đức', new Date(2026, 7, 20), new Date(2026, 7, 21), new Date(2026, 10, 20),
+    'LALZ', 'Nhôm', 'Long', 3209, 3201.5, 1, 25, 0.66, 33, '', -187.5, -220.5,
+  ]);
+  const parsed = await parseSimWorkbook(await workbook.xlsx.writeBuffer() as ArrayBuffer);
+  assert.equal(parsed.sourceMode, 'daily-sheets');
+  assert.equal(parsed.trades.length, 1);
+  assert.equal(parsed.trades[0].reportDate, '2026-08-21');
+  assert.ok(parsed.warnings.some((warning) => warning.includes('chỉ có dữ liệu đến 2026-08-14')));
+});

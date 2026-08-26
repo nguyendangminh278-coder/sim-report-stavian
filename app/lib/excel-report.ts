@@ -176,6 +176,10 @@ export function formatNumber(
   }).format(value);
 }
 
+function latestReportDate(trades: TradeRecord[]): string {
+  return trades.map((trade) => trade.reportDate).filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value)).sort().at(-1) || '';
+}
+
 /** Parse a SIM workbook entirely in memory. No file content leaves the browser. */
 export async function parseSimWorkbook(input: ArrayBuffer): Promise<ParsedSimWorkbook> {
   const imported = await import("exceljs");
@@ -191,25 +195,27 @@ export async function parseSimWorkbook(input: ArrayBuffer): Promise<ParsedSimWor
 
   let trades: TradeRecord[] = [];
   let sourceMode: ParsedSimWorkbook["sourceMode"] = "daily-sheets";
+  const summaryParsed = summarySheet ? parseSummarySheet(summarySheet) : { trades: [], warnings: [] };
+  const dailyParsed = parseDailySheets(workbook.worksheets);
+  const summaryLatest = latestReportDate(summaryParsed.trades);
+  const dailyLatest = latestReportDate(dailyParsed.trades);
 
-  if (summarySheet) {
-    const parsed = parseSummarySheet(summarySheet);
-    if (parsed.trades.length > 0) {
-      trades = parsed.trades;
-      sourceMode = "summary-sheet";
-      warnings.push(...parsed.warnings);
-    } else {
-      warnings.push(
-        `Không đọc được bảng 22 cột trong sheet “${summarySheet.name}”; đã thử đọc các sheet ngày.`,
-      );
-    }
-  }
-
-  if (trades.length === 0) {
-    const fallback = parseDailySheets(workbook.worksheets);
-    trades = fallback.trades;
-    warnings.push(...fallback.warnings);
+  if (summaryParsed.trades.length > 0 && !(dailyParsed.trades.length > 0 && dailyLatest > summaryLatest)) {
+    trades = summaryParsed.trades;
+    sourceMode = "summary-sheet";
+    warnings.push(...summaryParsed.warnings);
+  } else if (dailyParsed.trades.length > 0) {
+    trades = dailyParsed.trades;
     sourceMode = "daily-sheets";
+    warnings.push(...dailyParsed.warnings);
+    if (summaryParsed.trades.length > 0 && dailyLatest > summaryLatest) {
+      warnings.push('Sheet tổng hợp chỉ có dữ liệu đến ' + summaryLatest + '; đã dựng lại từ các sheet ngày đến ' + dailyLatest + '.');
+    } else if (summarySheet) {
+      warnings.push('Không đọc được bảng 22 cột trong sheet “' + summarySheet.name + '”; đã đọc các sheet ngày.');
+    }
+  } else if (summarySheet) {
+    warnings.push(...summaryParsed.warnings);
+    warnings.push('Không đọc được bảng 22 cột trong sheet “' + summarySheet.name + '”; đã thử đọc các sheet ngày.');
   }
 
   if (trades.length === 0) {
@@ -459,7 +465,7 @@ function parseDailySheets(sheets: ExcelWorksheet[]): {
 
   if (trades.length > 0) {
     warnings.push(
-      "Dữ liệu được dựng từ các sheet ngày vì không có sheet tổng hợp; hãy kiểm tra lại tài khoản và các ô gộp trước khi xuất.",
+      "Dữ liệu được dựng từ các sheet ngày; hãy kiểm tra lại tài khoản và các ô gộp trước khi xuất.",
     );
   }
 

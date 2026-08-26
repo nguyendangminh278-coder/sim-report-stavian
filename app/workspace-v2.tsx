@@ -8,10 +8,13 @@ import {
   ImageType,
   PositionRow,
   TradeRow,
+  auditAiResult,
+  buildExtractionAuditPrompt,
   buildExtractionPrompt,
   calculateTrade,
   createGeminiResponseSchema,
   formatLots,
+  extractionQualityScore,
   formatNumber,
   imageTypeLabel,
   inferImageType,
@@ -261,12 +264,16 @@ function strictSchema(type: ImageType) {
     [key: string]: unknown;
   };
   if (type === 'positions') {
-    delete schema.properties.trades;
-    schema.required = schema.required.filter((field) => field !== 'trades');
+    for (const field of ['trades', 'trade_lines', 'visible_trade_line_count', 'visible_trade_pair_count']) {
+      delete schema.properties[field];
+      schema.required = schema.required.filter((requiredField) => requiredField !== field);
+    }
   }
   if (type === 'trades') {
-    delete schema.properties.positions;
-    schema.required = schema.required.filter((field) => field !== 'positions');
+    for (const field of ['positions', 'visible_position_count', 'visible_ote_total']) {
+      delete schema.properties[field];
+      schema.required = schema.required.filter((requiredField) => requiredField !== field);
+    }
   }
   return schema;
 }
@@ -360,14 +367,21 @@ export default function WorkspaceV2() {
     if (!model.trim()) throw new Error(`Chưa chọn model ${providerLabel}.`);
     const data = await fileToBase64(file);
     const prompt = buildExtractionPrompt(accountName, accountCode, fee, file.name, expectedType);
+    const request = (requestPrompt: string) => callConfiguredAiJson<AiResult>({
+      prompt: requestPrompt,
+      schema: strictSchema(expectedType),
+      schemaName: `sim_report_${expectedType}`,
+      maxOutputTokens: 12288,
+      images: [{ mimeType: file.type || 'image/jpeg', data }],
+    });
     try {
-      return await callConfiguredAiJson<AiResult>({
-        prompt,
-        schema: strictSchema(expectedType),
-        schemaName: `sim_report_${expectedType}`,
-        maxOutputTokens: 8192,
-        images: [{ mimeType: file.type || 'image/jpeg', data }],
-      });
+      const first = await request(prompt);
+      const issues = auditAiResult(first, expectedType);
+      if (!issues.length) return first;
+      const second = await request(buildExtractionAuditPrompt(prompt, issues, first));
+      return extractionQualityScore(second, expectedType) >= extractionQualityScore(first, expectedType)
+        ? second
+        : first;
     } catch (error) {
       if (error instanceof Error && /JSON/i.test(error.message)) {
         throw new Error('Kết quả AI không đúng JSON. Hãy thử crop ảnh sát bảng hơn.');
@@ -379,10 +393,11 @@ export default function WorkspaceV2() {
   function mergeAiResult(result: AiResult, fileName: string, expectedType: ImageType) {
     const selected = selectAiData(result, expectedType);
     const positions = normalizePositions(selected.positions);
-    const trades = normalizeTrades(selected.trades);
+    const trades = normalizeTrades(selected.trades, selected.tradeLines);
     const reportId = `${accountName}::${accountCode || accountName}`;
     const qualityWarnings = [
       ...selected.warnings,
+      ...auditAiResult(result, expectedType),
       ...positions
         .filter((row) => row.confidence !== null && row.confidence < 0.75)
         .map((row) => `Vị thế ${row.code}: độ tin cậy thấp.`),
