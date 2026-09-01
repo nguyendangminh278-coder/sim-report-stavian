@@ -290,8 +290,8 @@ export default function WorkspaceV2() {
   const [provider, setProvider] = useState<AiProvider>('gemini');
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [openAiApiKey, setOpenAiApiKey] = useState('');
-  const [geminiModel, setGeminiModel] = useState(DEFAULT_GEMINI_MODEL);
-  const [openAiModel, setOpenAiModel] = useState(DEFAULT_OPENAI_MODEL);
+  const [geminiModel, setGeminiModel] = useState<string>(DEFAULT_GEMINI_MODEL);
+  const [openAiModel, setOpenAiModel] = useState<string>(DEFAULT_OPENAI_MODEL);
   const [showKey, setShowKey] = useState(false);
   const [connectionCheck, setConnectionCheck] = useState<{
     status: 'idle' | 'testing' | 'success' | 'error';
@@ -301,7 +301,6 @@ export default function WorkspaceV2() {
   const model = provider === 'openai' ? openAiModel : geminiModel;
   const providerLabel = provider === 'openai' ? 'OpenAI' : 'Gemini';
   const setApiKey = provider === 'openai' ? setOpenAiApiKey : setGeminiApiKey;
-  const setModel = provider === 'openai' ? setOpenAiModel : setGeminiModel;
 
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [reports, setReports] = useState<AccountReport[]>([]);
