@@ -1,6 +1,11 @@
 'use client';
 
-import { activeAiSettings, loadLocalAiSettings } from './local-ai-settings.ts';
+import {
+  activeAiSettings,
+  geminiModelCandidates,
+  loadLocalAiSettings,
+  rememberWorkingGeminiModel,
+} from './local-ai-settings.ts';
 
 export type AiJsonSchema = Record<string, unknown>;
 
@@ -74,16 +79,45 @@ function openAiError(status: number, message: string, model: string) {
   return new Error(`OpenAI lỗi ${status}: ${message || 'Không xử lý được yêu cầu.'}`);
 }
 
-async function callGeminiJson<T>(options: ConfiguredJsonOptions, apiKey: string, model: string): Promise<T> {
+type GeminiPayload = {
+  error?: { code?: number; message?: string };
+  candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+};
+
+function geminiError(code: number, message: string, model: string) {
+  if (code === 429) return new Error(`Model “${model}” đang hết quota miễn phí tạm thời.`);
+  if (code === 401) return new Error('Gemini API Key không hợp lệ. Hãy tạo lại key trong Google AI Studio.');
+  if (code === 403) {
+    return new Error('Gemini API Key chưa được cấp quyền, Generative Language API chưa bật, hoặc key đang chặn tên miền GitHub Pages.');
+  }
+  if (code === 404) return new Error(`Model “${model}” chưa khả dụng cho API Key này.`);
+  if (code === 400) return new Error(`Gemini không chấp nhận yêu cầu với model “${model}”: ${message || 'yêu cầu không hợp lệ'}.`);
+  return new Error(`Gemini lỗi ${code}: ${message || 'Không xử lý được dữ liệu.'}`);
+}
+
+export function shouldTryNextGeminiModel(code: number, message = '') {
+  return code === 404
+    || code === 429
+    || (code === 400 && /model|not found|not supported|response.?schema/i.test(message));
+}
+
+async function callGeminiModel<T>(
+  options: ConfiguredJsonOptions,
+  apiKey: string,
+  model: string,
+): Promise<{ value: T; model: string }> {
   const parts = [
     ...(options.images || []).map((image) => ({ inlineData: { mimeType: image.mimeType, data: image.data } })),
     { text: options.prompt },
   ];
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
       body: JSON.stringify({
         contents: [{ parts }],
         generationConfig: {
@@ -95,25 +129,71 @@ async function callGeminiJson<T>(options: ConfiguredJsonOptions, apiKey: string,
       }),
     },
   );
-  const payload = await response.json() as {
-    error?: { code?: number; message?: string };
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
+  const payload = await response.json() as GeminiPayload;
   if (!response.ok || payload.error) {
     const code = payload.error?.code || response.status;
     const message = payload.error?.message || 'Gemini không xử lý được dữ liệu.';
-    if (code === 429) throw new Error('Gemini đã hết quota tạm thời. Hãy đợi rồi thử lại.');
-    if (code === 401 || code === 403) throw new Error('Gemini API Key không hợp lệ hoặc chưa được cấp quyền.');
-    if (code === 404) throw new Error(`Model “${model}” không khả dụng. Hãy đổi model trong Cấu hình AI.`);
-    throw new Error(`Gemini lỗi ${code}: ${message}`);
+    const error = geminiError(code, message, model) as Error & { code?: number; apiMessage?: string };
+    error.code = code;
+    error.apiMessage = message;
+    throw error;
   }
   const raw = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('').trim() || '';
   if (!raw) throw new Error('Gemini trả về kết quả rỗng.');
   try {
-    return JSON.parse(cleanJsonText(raw)) as T;
+    return { value: JSON.parse(cleanJsonText(raw)) as T, model };
   } catch {
     throw new Error('Gemini trả về JSON không hợp lệ. Hãy thử lại.');
   }
+}
+
+async function callGeminiJson<T>(options: ConfiguredJsonOptions, apiKey: string, selectedModel: string): Promise<T> {
+  const candidates = geminiModelCandidates(selectedModel);
+  let lastError: Error | null = null;
+  for (const [index, model] of candidates.entries()) {
+    try {
+      const result = await callGeminiModel<T>(options, apiKey, model);
+      rememberWorkingGeminiModel(result.model);
+      return result.value;
+    } catch (error) {
+      const typed = error as Error & { code?: number; apiMessage?: string };
+      lastError = typed;
+      const canRetry = index < candidates.length - 1
+        && typeof typed.code === 'number'
+        && shouldTryNextGeminiModel(typed.code, typed.apiMessage);
+      if (!canRetry) throw typed;
+    }
+  }
+  throw lastError || new Error('Không kết nối được các model Gemini miễn phí.');
+}
+
+export async function testGeminiApiConnection(apiKey: string, selectedModel: string) {
+  const key = apiKey.trim();
+  if (!key) throw new Error('Chưa nhập Gemini API Key.');
+  const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000', {
+    headers: { 'x-goog-api-key': key },
+  });
+  const payload = await response.json() as {
+    error?: { code?: number; message?: string };
+    models?: Array<{ name?: string; supportedGenerationMethods?: string[] }>;
+  };
+  if (!response.ok || payload.error) {
+    const code = payload.error?.code || response.status;
+    throw geminiError(code, payload.error?.message || '', selectedModel);
+  }
+  const available = new Set((payload.models || [])
+    .filter((model) => model.supportedGenerationMethods?.includes('generateContent'))
+    .map((model) => (model.name || '').replace(/^models\//, ''))
+    .filter(Boolean));
+  const workingModel = geminiModelCandidates(selectedModel).find((model) => available.has(model));
+  if (!workingModel) {
+    throw new Error('API Key hợp lệ nhưng chưa được cấp model Gemini Flash miễn phí nào hỗ trợ generateContent.');
+  }
+  rememberWorkingGeminiModel(workingModel);
+  return {
+    model: workingModel,
+    message: `Kết nối thành công với ${workingModel}.`,
+  };
 }
 
 async function callOpenAiJson<T>(options: ConfiguredJsonOptions, apiKey: string, model: string): Promise<T> {

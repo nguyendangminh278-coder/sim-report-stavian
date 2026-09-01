@@ -35,3 +35,42 @@
   font-size: 9px;
   line-height: 1.6;
 }
+
+.settings-panel .field select {
+  color: #fff;
+  border-color: rgb(255 255 255 / 24%);
+  background: #17634f;
+}
+
+.settings-panel .field select option {
+  color: #12362c;
+  background: #fff;
+}
+
+.provider-check-button {
+  margin-top: 10px;
+}
+
+.provider-connection-status {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.provider-connection-status.success {
+  color: #d8f8e7;
+  border-color: rgb(142 229 186 / 42%);
+  background: rgb(142 229 186 / 10%);
+}
+
+.provider-connection-status.error {
+  color: #ffe1d8;
+  border-color: rgb(255 161 136 / 40%);
+  background: rgb(255 112 76 / 10%);
+}
+
+.provider-connection-status.testing {
+  color: rgb(255 255 255 / 74%);
+}

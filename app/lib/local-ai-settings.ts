@@ -2,7 +2,25 @@
 
 export type AiProvider = 'gemini' | 'openai';
 
-export const DEFAULT_GEMINI_MODEL = 'gemini-3.5-flash-lite';
+export const FREE_GEMINI_MODELS = [
+  {
+    id: 'gemini-2.5-flash-lite',
+    label: 'Gemini 2.5 Flash-Lite',
+    note: 'Miễn phí · ổn định nhất',
+  },
+  {
+    id: 'gemini-3.5-flash-lite',
+    label: 'Gemini 3.5 Flash-Lite',
+    note: 'Miễn phí · model mới',
+  },
+  {
+    id: 'gemini-2.5-flash',
+    label: 'Gemini 2.5 Flash',
+    note: 'Miễn phí · đọc ảnh tốt',
+  },
+] as const;
+
+export const DEFAULT_GEMINI_MODEL = FREE_GEMINI_MODELS[0].id;
 export const DEFAULT_OPENAI_MODEL = 'gpt-4o-mini';
 
 const PROVIDER_STORAGE = 'sim_report_ai_provider';
@@ -11,6 +29,9 @@ const OPENAI_API_KEY_STORAGE = 'sim_report_openai_key';
 const LEGACY_MODEL_STORAGE = 'sim_report_model';
 const GEMINI_MODEL_STORAGE = 'sim_report_gemini_model';
 const OPENAI_MODEL_STORAGE = 'sim_report_openai_model';
+const SETTINGS_VERSION_STORAGE = 'sim_report_ai_settings_version';
+const CURRENT_SETTINGS_VERSION = '2';
+export const GEMINI_MODEL_CHANGED_EVENT = 'sim-report-gemini-model-changed';
 
 export type LocalAiSettings = {
   provider: AiProvider;
@@ -21,6 +42,21 @@ export type LocalAiSettings = {
   /** Active model alias retained for older call sites. */
   model: string;
 };
+
+export function geminiModelCandidates(selectedModel = ''): string[] {
+  return [...new Set([
+    selectedModel.trim(),
+    ...FREE_GEMINI_MODELS.map((model) => model.id),
+  ].filter(Boolean))];
+}
+
+export function rememberWorkingGeminiModel(model: string) {
+  if (typeof window === 'undefined' || !model.trim()) return;
+  localStorage.setItem(GEMINI_MODEL_STORAGE, model.trim());
+  localStorage.setItem(LEGACY_MODEL_STORAGE, model.trim());
+  localStorage.setItem(SETTINGS_VERSION_STORAGE, CURRENT_SETTINGS_VERSION);
+  window.dispatchEvent(new CustomEvent(GEMINI_MODEL_CHANGED_EVENT, { detail: model.trim() }));
+}
 
 function emptySettings(): LocalAiSettings {
   return {
@@ -37,9 +73,18 @@ export function loadLocalAiSettings(): LocalAiSettings {
   if (typeof window === 'undefined') return emptySettings();
   const storedProvider = localStorage.getItem(PROVIDER_STORAGE);
   const provider: AiProvider = storedProvider === 'openai' ? 'openai' : 'gemini';
-  const geminiModel = localStorage.getItem(GEMINI_MODEL_STORAGE)
+  const storedGeminiModel = localStorage.getItem(GEMINI_MODEL_STORAGE)
     || localStorage.getItem(LEGACY_MODEL_STORAGE)
     || DEFAULT_GEMINI_MODEL;
+  const settingsVersion = localStorage.getItem(SETTINGS_VERSION_STORAGE);
+  const geminiModel = settingsVersion === CURRENT_SETTINGS_VERSION
+    ? storedGeminiModel
+    : DEFAULT_GEMINI_MODEL;
+  if (settingsVersion !== CURRENT_SETTINGS_VERSION) {
+    localStorage.setItem(GEMINI_MODEL_STORAGE, geminiModel);
+    localStorage.setItem(LEGACY_MODEL_STORAGE, geminiModel);
+    localStorage.setItem(SETTINGS_VERSION_STORAGE, CURRENT_SETTINGS_VERSION);
+  }
   const openAiModel = localStorage.getItem(OPENAI_MODEL_STORAGE) || DEFAULT_OPENAI_MODEL;
   return {
     provider,
@@ -87,6 +132,7 @@ export function saveLocalAiSettings(next: Partial<LocalAiSettings>) {
   localStorage.setItem(GEMINI_MODEL_STORAGE, geminiModel);
   localStorage.setItem(OPENAI_MODEL_STORAGE, openAiModel);
   localStorage.setItem(LEGACY_MODEL_STORAGE, geminiModel);
+  localStorage.setItem(SETTINGS_VERSION_STORAGE, CURRENT_SETTINGS_VERSION);
   sessionStorage.removeItem(GEMINI_API_KEY_STORAGE);
   sessionStorage.removeItem(OPENAI_API_KEY_STORAGE);
 }
