@@ -2,9 +2,7 @@
 
 import {
   activeAiSettings,
-  geminiModelCandidates,
   loadLocalAiSettings,
-  rememberWorkingGeminiModel,
 } from './local-ai-settings.ts';
 
 export type AiJsonSchema = Record<string, unknown>;
@@ -85,6 +83,9 @@ type GeminiPayload = {
 };
 
 function geminiError(code: number, message: string, model: string) {
+  if (isInvalidGeminiApiKeyMessage(message)) {
+    return new Error('Gemini API Key không hợp lệ. Hãy tạo key mới trong Google AI Studio rồi nhập lại.');
+  }
   if (code === 429) return new Error(`Model “${model}” đang hết quota miễn phí tạm thời.`);
   if (code === 401) return new Error('Gemini API Key không hợp lệ. Hãy tạo lại key trong Google AI Studio.');
   if (code === 403) {
@@ -95,10 +96,8 @@ function geminiError(code: number, message: string, model: string) {
   return new Error(`Gemini lỗi ${code}: ${message || 'Không xử lý được dữ liệu.'}`);
 }
 
-export function shouldTryNextGeminiModel(code: number, message = '') {
-  return code === 404
-    || code === 429
-    || (code === 400 && /model|not found|not supported|response.?schema/i.test(message));
+export function isInvalidGeminiApiKeyMessage(message = '') {
+  return /api key not valid|invalid api key|api_key_invalid/i.test(message);
 }
 
 async function callGeminiModel<T>(
@@ -148,23 +147,8 @@ async function callGeminiModel<T>(
 }
 
 async function callGeminiJson<T>(options: ConfiguredJsonOptions, apiKey: string, selectedModel: string): Promise<T> {
-  const candidates = geminiModelCandidates(selectedModel);
-  let lastError: Error | null = null;
-  for (const [index, model] of candidates.entries()) {
-    try {
-      const result = await callGeminiModel<T>(options, apiKey, model);
-      rememberWorkingGeminiModel(result.model);
-      return result.value;
-    } catch (error) {
-      const typed = error as Error & { code?: number; apiMessage?: string };
-      lastError = typed;
-      const canRetry = index < candidates.length - 1
-        && typeof typed.code === 'number'
-        && shouldTryNextGeminiModel(typed.code, typed.apiMessage);
-      if (!canRetry) throw typed;
-    }
-  }
-  throw lastError || new Error('Không kết nối được các model Gemini miễn phí.');
+  const result = await callGeminiModel<T>(options, apiKey, selectedModel);
+  return result.value;
 }
 
 export async function testGeminiApiConnection(apiKey: string, selectedModel: string) {
@@ -185,14 +169,12 @@ export async function testGeminiApiConnection(apiKey: string, selectedModel: str
     .filter((model) => model.supportedGenerationMethods?.includes('generateContent'))
     .map((model) => (model.name || '').replace(/^models\//, ''))
     .filter(Boolean));
-  const workingModel = geminiModelCandidates(selectedModel).find((model) => available.has(model));
-  if (!workingModel) {
-    throw new Error('API Key hợp lệ nhưng chưa được cấp model Gemini Flash miễn phí nào hỗ trợ generateContent.');
+  if (!available.has(selectedModel)) {
+    throw new Error(`API Key hợp lệ nhưng chưa được cấp quyền dùng ${selectedModel}.`);
   }
-  rememberWorkingGeminiModel(workingModel);
   return {
-    model: workingModel,
-    message: `Kết nối thành công với ${workingModel}.`,
+    model: selectedModel,
+    message: `Kết nối thành công với ${selectedModel}.`,
   };
 }
 

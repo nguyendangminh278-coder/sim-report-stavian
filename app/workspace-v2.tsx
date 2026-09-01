@@ -30,8 +30,6 @@ import {
 import {
   DEFAULT_GEMINI_MODEL,
   DEFAULT_OPENAI_MODEL,
-  FREE_GEMINI_MODELS,
-  GEMINI_MODEL_CHANGED_EVENT,
   loadLocalAiSettings,
   saveLocalAiSettings,
   type AiProvider,
@@ -290,7 +288,7 @@ export default function WorkspaceV2() {
   const [provider, setProvider] = useState<AiProvider>('gemini');
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [openAiApiKey, setOpenAiApiKey] = useState('');
-  const [geminiModel, setGeminiModel] = useState<string>(DEFAULT_GEMINI_MODEL);
+  const geminiModel = DEFAULT_GEMINI_MODEL;
   const [openAiModel, setOpenAiModel] = useState<string>(DEFAULT_OPENAI_MODEL);
   const [showKey, setShowKey] = useState(false);
   const [connectionCheck, setConnectionCheck] = useState<{
@@ -309,25 +307,16 @@ export default function WorkspaceV2() {
 
   useEffect(() => {
     const settings = loadLocalAiSettings();
-    const handleWorkingModel = (event: Event) => {
-      const modelEvent = event as CustomEvent<string>;
-      if (modelEvent.detail) setGeminiModel(modelEvent.detail);
-    };
-    window.addEventListener(GEMINI_MODEL_CHANGED_EVENT, handleWorkingModel);
     const timer = window.setTimeout(() => {
       setProvider(settings.provider);
       setGeminiApiKey(settings.geminiApiKey);
       setOpenAiApiKey(settings.openAiApiKey);
-      setGeminiModel(settings.geminiModel || DEFAULT_GEMINI_MODEL);
       setOpenAiModel(settings.openAiModel || DEFAULT_OPENAI_MODEL);
       if (settings.geminiApiKey || settings.openAiApiKey) {
         setToast('Đã tải cấu hình AI từ trình duyệt này');
       }
     }, 0);
-    return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener(GEMINI_MODEL_CHANGED_EVENT, handleWorkingModel);
-    };
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -383,7 +372,6 @@ export default function WorkspaceV2() {
     setConnectionCheck({ status: 'testing', message: 'Đang kiểm tra key và model miễn phí…' });
     try {
       const result = await testGeminiApiConnection(geminiApiKey, geminiModel);
-      setGeminiModel(result.model);
       saveLocalAiSettings({
         provider: 'gemini',
         geminiApiKey,
@@ -730,11 +718,9 @@ export default function WorkspaceV2() {
             <button type="button" className={provider === 'openai' ? 'active' : ''} aria-pressed={provider === 'openai'} onClick={() => setProvider('openai')}>GPT-4o mini</button>
           </div>
           <label className="field"><span>{providerLabel} API Key</span><div className="key-field"><input type={showKey ? 'text' : 'password'} value={apiKey} placeholder={provider === 'openai' ? 'sk-…' : 'AIza…'} autoComplete="off" spellCheck={false} onChange={(event) => setApiKey(event.target.value)} /><button type="button" onClick={() => setShowKey((value) => !value)}>{showKey ? 'Ẩn' : 'Hiện'}</button></div></label>
-          <label className="field"><span>Model</span>{provider === 'gemini' ? (
-            <select value={geminiModel} onChange={(event) => { setGeminiModel(event.target.value); setConnectionCheck({ status: 'idle', message: '' }); }}>
-              {FREE_GEMINI_MODELS.map((item) => <option key={item.id} value={item.id}>{item.label} — {item.note}</option>)}
-            </select>
-          ) : <input value={openAiModel} onChange={(event) => setOpenAiModel(event.target.value)} />}</label>
+          <label className="field"><span>Model</span>{provider === 'gemini'
+            ? <input value="Gemini 3.7 Flash — miễn phí" readOnly aria-readonly="true" />
+            : <input value={openAiModel} onChange={(event) => setOpenAiModel(event.target.value)} />}</label>
           <div className="cloud-save-note">
             <span aria-hidden="true" />
             <div><strong>{apiKey.trim() ? `${providerLabel} API Key đã nhập` : 'Lưu cục bộ trên thiết bị'}</strong><p>Không cần đăng nhập. Mỗi nhà cung cấp có khóa riêng.</p></div>
@@ -744,7 +730,7 @@ export default function WorkspaceV2() {
           {provider === 'gemini' && connectionCheck.message ? <p className={`provider-connection-status ${connectionCheck.status}`} role="status" aria-live="polite">{connectionCheck.message}</p> : null}
           <a className="text-link" href={provider === 'openai' ? 'https://platform.openai.com/api-keys' : 'https://aistudio.google.com/api-keys'} target="_blank" rel="noreferrer">Tạo {providerLabel} API Key ↗</a>
           {provider === 'openai' ? <p className="provider-cost-note">GPT-4o mini là API trả phí theo mức sử dụng; gói ChatGPT không bao gồm chi phí API.</p> : null}
-          {provider === 'gemini' ? <p className="provider-cost-note">Ba model trong danh sách đều có Free Tier. Khi model đã chọn hết quota hoặc chưa mở cho key, hệ thống tự thử model miễn phí tiếp theo.</p> : null}
+          {provider === 'gemini' ? <p className="provider-cost-note">Chỉ dùng Gemini 3.7 Flash: model Flash miễn phí mạnh nhất, phù hợp đọc ảnh và dữ liệu bảng.</p> : null}
           <div className="privacy-note"><strong>Ranh giới dữ liệu</strong><p>API Key được lưu trong localStorage của trình duyệt này và chỉ gửi trực tiếp tới {providerLabel} khi xử lý dữ liệu.</p></div>
           <div className="rule-note"><strong>Công thức đang áp dụng</strong><code>Tấn = lot × 25</code><code>Tổng phí = tấn × phí × 2</code><code>Long: (đóng − mở) × tấn</code><code>Short: (mở − đóng) × tấn</code><p>Yêu cầu mới đã thay thế công thức một lượt trước đây.</p></div>
         </aside>

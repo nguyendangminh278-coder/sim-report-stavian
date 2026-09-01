@@ -25,7 +25,7 @@ try {
 const sourceRoot = process.env.SIM_REPORT_SOURCE_DIR;
 const checkFile = process.env.SIM_REPORT_CHECK_FILE;
 const apiKey = process.env.GEMINI_API_KEY;
-const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite';
+const model = process.env.GEMINI_MODEL || 'gemini-3.7-flash';
 const outputFile = process.env.SIM_REPORT_AUDIT_OUTPUT || '.xlsx-analysis/gemini-august-audit.json';
 
 if (!sourceRoot || !checkFile || !apiKey) {

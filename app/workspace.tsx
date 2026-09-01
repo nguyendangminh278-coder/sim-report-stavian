@@ -228,7 +228,7 @@ export default function Workspace() {
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [rememberKey, setRememberKey] = useState(false);
-  const [model, setModel] = useState('gemini-2.5-flash-lite');
+  const [model, setModel] = useState('gemini-3.7-flash');
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [reports, setReports] = useState<AccountReport[]>([]);
   const [busy, setBusy] = useState(false);
